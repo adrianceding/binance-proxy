@@ -6,24 +6,14 @@ import (
 	"net/url"
 )
 
-func NewFuturesHandler() func(http.ResponseWriter, *http.Request) {
-	handler := Futures{}
+func NewFuturesHandler() func (w http.ResponseWriter, r *http.Request) {
+	handler := &Futures{}
 	return handler.Router
 }
 
-type FuturesKline struct {
-}
-
-type FuturesDepth struct {
-}
-
-type FuturesTickr struct {
-}
 
 type Futures struct {
-	Klines map[string][]FuturesKline
-	Depth  FuturesDepth
-	Ticker FuturesTickr
+	Service string
 }
 
 func (t *Futures) Router(w http.ResponseWriter, r *http.Request) {
