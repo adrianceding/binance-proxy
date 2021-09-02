@@ -6,17 +6,18 @@ import (
 	"net/url"
 )
 
-func NewFuturesHandler() func (w http.ResponseWriter, r *http.Request) {
-	handler := &Futures{}
+func NewFuturesHandler() func(w http.ResponseWriter, r *http.Request) {
+	handler := &Futures{
+		Service: service.NewFutures(),
+	}
 	return handler.Router
 }
 
-
 type Futures struct {
-	Service string
+	Service service.Futures
 }
 
-func (t *Futures) Router(w http.ResponseWriter, r *http.Request) {
+func (s *Futures) Router(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/fapi/v1/klines":
 		t.klines(w, r)
@@ -29,7 +30,7 @@ func (t *Futures) Router(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
+func (s *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	r.Host = "www.binancezh.io"
 	u, _ := url.Parse("https://www.binancezh.io")
 	proxy := httputil.NewSingleHostReverseProxy(u)
@@ -37,14 +38,19 @@ func (t *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-func (t *Futures) klines(w http.ResponseWriter, r *http.Request) {
+func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
+	// symbol	STRING	YES
+	// interval	ENUM	YES	详见枚举定义：K线间隔
+	// startTime	LONG	NO
+	// endTime	LONG	NO
+	// limit	INT	NO	默认 500; 最大 1000.
+	// fmt.Println(s.klines("BTCUSDT", "5m"))
+}
+
+func (s *Futures) depth(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (t *Futures) depth(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func (t *Futures) price(w http.ResponseWriter, r *http.Request) {
+func (s *Futures) price(w http.ResponseWriter, r *http.Request) {
 
 }
