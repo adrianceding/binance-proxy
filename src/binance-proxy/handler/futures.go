@@ -1,32 +1,35 @@
 package handler
 
 import (
+	"binance-proxy/service/futures"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func NewFuturesHandler() func(w http.ResponseWriter, r *http.Request) {
 	handler := &Futures{
-		Service: service.NewFutures(),
+		srv: futures.NewFutures(),
 	}
 	return handler.Router
 }
 
 type Futures struct {
-	Service service.Futures
+	srv *futures.Futures
 }
 
 func (s *Futures) Router(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/fapi/v1/klines":
-		t.klines(w, r)
+		s.klines(w, r)
 	case "/fapi/v1/ticker/depth":
-		t.depth(w, r)
+		s.depth(w, r)
 	case "/fapi/v1/ticker/24hr":
-		t.price(w, r)
+		s.price(w, r)
 	default:
-		t.reverseProxy(w, r)
+		s.reverseProxy(w, r)
 	}
 }
 
@@ -39,6 +42,7 @@ func (s *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
+	spew.Dump(s.srv.Klines("XMRUSDT", "5m"))
 	// symbol	STRING	YES
 	// interval	ENUM	YES	详见枚举定义：K线间隔
 	// startTime	LONG	NO
