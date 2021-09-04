@@ -1,9 +1,8 @@
 package futures
 
 import (
-	"errors"
+	"log"
 	"sync"
-	"sync/atomic"
 )
 
 type SymbolInterval struct {
@@ -12,8 +11,11 @@ type SymbolInterval struct {
 }
 
 type Futures struct {
+	lock chan struct{}
+	once sync.Once
+
 	maxIndex    uint64
-	symbolIndex sync.Map // map[SymbolInterval]uint64
+	symbolIndex map[SymbolInterval]uint64
 	waitingInit chan SymbolInterval
 
 	klines []*FuturesKlines
@@ -23,7 +25,12 @@ type Futures struct {
 
 func NewFutures() *Futures {
 	t := &Futures{
+		lock:        make(chan struct{}, 1),
+		symbolIndex: make(map[SymbolInterval]uint64),
 		waitingInit: make(chan SymbolInterval, 1024),
+		klines:      make([]*FuturesKlines, 0),
+		depth:       make([]*FuturesDepth, 0),
+		price:       make([]*FuturesPrice, 0),
 	}
 	go t.consumeWaitingInit()
 
@@ -31,63 +38,88 @@ func NewFutures() *Futures {
 }
 
 func (s *Futures) consumeWaitingInit() {
-	for si := range s.waitingInit {
-		if _, ok := s.symbolIndex.Load(si); ok {
-			continue
+	s.once.Do(func() {
+		for si := range s.waitingInit {
+			s.initSymbol(si)
 		}
-
-		index := atomic.AddUint64(&s.maxIndex, 1)
-
-		if v, err := NewFutresKlines(si); err != nil {
-			return
-		} else {
-			s.klines[index] = v
-		}
-		if v, err := NewFutresDepth(si); err != nil {
-			return
-		} else {
-			s.depth[index] = v
-		}
-		if v, err := NewFutresPrice(si); err != nil {
-			return
-		} else {
-			s.price[index] = v
-		}
-
-		s.symbolIndex.Store(si, index)
-	}
+	})
 }
 
-func (s *Futures) getIndex(si SymbolInterval) (uint64, error) {
-	if v, ok := s.symbolIndex.Load(si); ok {
-		return v.(uint64), nil
+func (s *Futures) initSymbol(si SymbolInterval) (err error) {
+	defer func() { <-s.lock }()
+	s.lock <- struct{}{}
+
+	if _, ok := s.symbolIndex[si]; ok {
+		log.Println("Futures ", si, " inited.Ignore")
+		return
 	}
 
-	s.waitingInit <- si
+	log.Println("Futures ", si, " initing.")
 
-	return 0, errors.New("symbol need init")
+	s.klines = append(s.klines, nil)
+	s.depth = append(s.depth, nil)
+	s.price = append(s.price, nil)
+
+	if s.klines[s.maxIndex], err = NewFutresKlines(si); err != nil {
+		log.Println("Futures klines ", si, " init error.Err:", err)
+		return
+	}
+	if s.depth[s.maxIndex], err = NewFutresDepth(si); err != nil {
+		log.Println("Futures depth ", si, " init error.Err:", err)
+		return
+	}
+	if s.price[s.maxIndex], err = NewFutresPrice(si); err != nil {
+		log.Println("Futures price ", si, " init error.Err:", err)
+		return
+	}
+
+	s.symbolIndex[si] = s.maxIndex
+
+	s.maxIndex++
+
+	log.Println("Futures ", si, " init success.")
+
+	return
 }
 
 func (s *Futures) Klines(symbol, interval string) *FuturesKlines {
-	if index, err := s.getIndex(SymbolInterval{Symbol: symbol, Interval: interval}); err == nil {
+	defer func() { <-s.lock }()
+	s.lock <- struct{}{}
+
+	si := SymbolInterval{Symbol: symbol, Interval: interval}
+	if index, ok := s.symbolIndex[si]; ok {
 		return s.klines[index]
 	}
+
+	s.waitingInit <- si
 
 	return nil
 }
 
 func (s *Futures) Depth(symbol string) *FuturesDepth {
-	if index, err := s.getIndex(SymbolInterval{Symbol: symbol, Interval: ""}); err == nil {
+	defer func() { <-s.lock }()
+	s.lock <- struct{}{}
+
+	si := SymbolInterval{Symbol: symbol, Interval: ""}
+	if index, ok := s.symbolIndex[si]; ok {
 		return s.depth[index]
 	}
+
+	s.waitingInit <- si
 
 	return nil
 }
 
 func (s *Futures) Price(symbol string) *FuturesPrice {
-	if index, err := s.getIndex(SymbolInterval{Symbol: symbol, Interval: ""}); err == nil {
+	defer func() { <-s.lock }()
+	s.lock <- struct{}{}
+
+	si := SymbolInterval{Symbol: symbol, Interval: ""}
+	if index, ok := s.symbolIndex[si]; ok {
 		return s.price[index]
 	}
+
+	s.waitingInit <- si
 
 	return nil
 }

@@ -7,7 +7,8 @@ import (
 )
 
 type FuturesKlines struct {
-	Klines [1001]FuturesKline
+	Klines    [2001]FuturesKline
+	addTrades chan *client.WsAggTradeEvent
 }
 type FuturesKline struct {
 	OpenDate         int64  // 1499040000000,      // 开盘时间
@@ -27,6 +28,7 @@ type FuturesKline struct {
 func NewFutresKlines(si SymbolInterval) (*FuturesKlines, error) {
 	k := &FuturesKlines{}
 
+	fmt.Println("wtf")
 	if _, _, err := client.WsAggTradeServe(si.Symbol, k.wsHandler, k.errHandler); err != nil {
 		fmt.Println("init error:", err)
 		return nil, err
@@ -36,8 +38,8 @@ func NewFutresKlines(si SymbolInterval) (*FuturesKlines, error) {
 }
 
 func (s *FuturesKlines) wsHandler(event *client.WsAggTradeEvent) {
-	event.
-		fmt.Println("event:", event)
+	fmt.Println(len(s.addTrades), "event:", event)
+	s.addTrades <- event
 }
 
 func (s *FuturesKlines) errHandler(err error) {

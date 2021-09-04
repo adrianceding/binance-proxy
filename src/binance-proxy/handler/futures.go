@@ -5,8 +5,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-
-	"github.com/davecgh/go-spew/spew"
+	"strconv"
 )
 
 func NewFuturesHandler() func(w http.ResponseWriter, r *http.Request) {
@@ -42,19 +41,67 @@ func (s *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
-	spew.Dump(s.srv.Klines("XMRUSDT", "5m"))
-	// symbol	STRING	YES
-	// interval	ENUM	YES	详见枚举定义：K线间隔
-	// startTime	LONG	NO
-	// endTime	LONG	NO
-	// limit	INT	NO	默认 500; 最大 1000.
-	// fmt.Println(s.klines("BTCUSDT", "5m"))
+	symbol := r.URL.Query().Get("symbol")
+	interval := r.URL.Query().Get("interval")
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "500"
+	}
+
+	limitInt, err := strconv.Atoi(limit)
+	switch {
+	case err != nil,
+		limitInt <= 0,
+		limitInt > 1500,
+		r.URL.Query().Get("startTime") != "",
+		r.URL.Query().Get("endTime") != "",
+		symbol == "",
+		interval == "":
+		s.reverseProxy(w, r)
+		return
+	}
+
+	data := s.srv.Klines(symbol, interval)
+	if data == nil {
+		s.reverseProxy(w, r)
+		return
+	}
+
 }
 
 func (s *Futures) depth(w http.ResponseWriter, r *http.Request) {
+	symbol := r.URL.Query().Get("symbol")
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "500"
+	}
 
+	limitInt, err := strconv.Atoi(limit)
+	switch {
+	case err != nil,
+		symbol == "",
+		limitInt <= 0,
+		limitInt > 1000:
+		s.reverseProxy(w, r)
+		return
+	}
+
+	data := s.srv.Depth(symbol)
+	if data == nil {
+		s.reverseProxy(w, r)
+		return
+	}
 }
 
 func (s *Futures) price(w http.ResponseWriter, r *http.Request) {
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		s.reverseProxy(w, r)
+	}
 
+	data := s.srv.Price(symbol)
+	if data == nil {
+		s.reverseProxy(w, r)
+		return
+	}
 }
