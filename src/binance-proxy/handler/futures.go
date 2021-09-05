@@ -2,10 +2,12 @@ package handler
 
 import (
 	"binance-proxy/service/futures"
+	"encoding/json"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 func NewFuturesHandler() func(w http.ResponseWriter, r *http.Request) {
@@ -23,10 +25,8 @@ func (s *Futures) Router(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/fapi/v1/klines":
 		s.klines(w, r)
-	case "/fapi/v1/ticker/depth":
+	case "/fapi/v1/depth":
 		s.depth(w, r)
-	case "/fapi/v1/ticker/24hr":
-		s.price(w, r)
 	default:
 		s.reverseProxy(w, r)
 	}
@@ -67,6 +67,53 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	minLen := len(data)
+	if minLen > limitInt {
+		minLen = limitInt
+	}
+
+	klines := make([]interface{}, minLen)
+
+	for i := minLen; i > 0; i-- {
+		ri := len(data) - i
+		klines[minLen-i] = []interface{}{
+			data[ri].OpenTime,
+			data[ri].Open,
+			data[ri].High,
+			data[ri].Low,
+			data[ri].Close,
+			data[ri].Volume,
+			data[ri].CloseTime,
+			data[ri].QuoteAssetVolume,
+			data[ri].TradeNum,
+			data[ri].TakerBuyBaseAssetVolume,
+			data[ri].TakerBuyQuoteAssetVolume,
+			"0",
+		}
+	}
+	now := time.Now().UnixNano() / 1e6
+	if len(data) > 0 && now > data[len(data)-1].CloseTime {
+		klines = append(klines, []interface{}{
+			data[len(data)-1].CloseTime + 1,
+			data[len(data)-1].Close,
+			data[len(data)-1].Close,
+			data[len(data)-1].Close,
+			data[len(data)-1].Close,
+			"0.0",
+			data[len(data)-1].CloseTime + 1 + (data[len(data)-1].CloseTime - data[len(data)-1].OpenTime),
+			"0.0",
+			0,
+			"0.0",
+			"0.0",
+			"0",
+		})
+		klines = klines[len(klines)-minLen:]
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Data-Source", "websocket")
+	j, _ := json.Marshal(klines)
+	w.Write(j)
 }
 
 func (s *Futures) depth(w http.ResponseWriter, r *http.Request) {
@@ -91,17 +138,35 @@ func (s *Futures) depth(w http.ResponseWriter, r *http.Request) {
 		s.reverseProxy(w, r)
 		return
 	}
-}
-
-func (s *Futures) price(w http.ResponseWriter, r *http.Request) {
-	symbol := r.URL.Query().Get("symbol")
-	if symbol == "" {
-		s.reverseProxy(w, r)
+	minLen := len(data.Bids)
+	if minLen > len(data.Asks) {
+		minLen = len(data.Asks)
+	}
+	if minLen > limitInt {
+		minLen = limitInt
 	}
 
-	data := s.srv.Price(symbol)
-	if data == nil {
-		s.reverseProxy(w, r)
-		return
+	bids := make([][2]string, minLen)
+	asks := make([][2]string, minLen)
+	for i := minLen; i > 0; i-- {
+		asks[minLen-i] = [2]string{
+			data.Asks[minLen-i].Price,
+			data.Asks[minLen-i].Quantity,
+		}
+		bids[minLen-i] = [2]string{
+			data.Bids[minLen-i].Price,
+			data.Bids[minLen-i].Quantity,
+		}
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	now := time.Now().UnixNano() / 1e6
+	j, _ := json.Marshal(map[string]interface{}{
+		"lastUpdateId": data.LastUpdateID,
+		"E":            now,
+		"T":            now,
+		"bids":         bids,
+		"asks":         asks,
+	})
+	w.Write(j)
 }

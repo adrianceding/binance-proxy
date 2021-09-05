@@ -3,6 +3,8 @@ package futures
 import (
 	"log"
 	"sync"
+
+	client "github.com/adshao/go-binance/v2/futures"
 )
 
 type SymbolInterval struct {
@@ -11,43 +13,38 @@ type SymbolInterval struct {
 }
 
 type Futures struct {
-	lock chan struct{}
-	once sync.Once
+	mutex sync.RWMutex
 
-	maxIndex    uint64
-	symbolIndex map[SymbolInterval]uint64
-	waitingInit chan SymbolInterval
+	maxIndex       uint64
+	symbolIndex    map[SymbolInterval]uint64
+	needInitSymbol chan SymbolInterval
 
-	klines []*FuturesKlines
-	depth  []*FuturesDepth
-	price  []*FuturesPrice
+	klinesSrv []*FuturesKlines
+	depthSrv  []*FuturesDepth
 }
 
 func NewFutures() *Futures {
 	t := &Futures{
-		lock:        make(chan struct{}, 1),
-		symbolIndex: make(map[SymbolInterval]uint64),
-		waitingInit: make(chan SymbolInterval, 1024),
-		klines:      make([]*FuturesKlines, 0),
-		depth:       make([]*FuturesDepth, 0),
-		price:       make([]*FuturesPrice, 0),
+		symbolIndex:    make(map[SymbolInterval]uint64),
+		needInitSymbol: make(chan SymbolInterval, 1024),
+
+		klinesSrv: make([]*FuturesKlines, 0),
+		depthSrv:  make([]*FuturesDepth, 0),
 	}
-	go t.consumeWaitingInit()
+	go t.consume()
 
 	return t
 }
 
-func (s *Futures) consumeWaitingInit() {
-	s.once.Do(func() {
-		for si := range s.waitingInit {
-			s.initSymbol(si)
-		}
-	})
+func (s *Futures) consume() {
+	for si := range s.needInitSymbol {
+		s.initSymbol(si)
+	}
 }
 
-func (s *Futures) initSymbol(si SymbolInterval) (err error) {
-	defer func() { <-s.lock }()
-	s.lock <- struct{}{}
+func (s *Futures) initSymbol(si SymbolInterval) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
 
 	if _, ok := s.symbolIndex[si]; ok {
 		log.Println("Futures ", si, " inited.Ignore")
@@ -56,20 +53,16 @@ func (s *Futures) initSymbol(si SymbolInterval) (err error) {
 
 	log.Println("Futures ", si, " initing.")
 
-	s.klines = append(s.klines, nil)
-	s.depth = append(s.depth, nil)
-	s.price = append(s.price, nil)
+	s.klinesSrv = append(s.klinesSrv, nil)
+	s.depthSrv = append(s.depthSrv, nil)
 
-	if s.klines[s.maxIndex], err = NewFutresKlines(si); err != nil {
+	var err error
+	if s.klinesSrv[s.maxIndex], err = NewFutresKlines(si); err != nil {
 		log.Println("Futures klines ", si, " init error.Err:", err)
 		return
 	}
-	if s.depth[s.maxIndex], err = NewFutresDepth(si); err != nil {
+	if s.depthSrv[s.maxIndex], err = NewFutresDepth(si); err != nil {
 		log.Println("Futures depth ", si, " init error.Err:", err)
-		return
-	}
-	if s.price[s.maxIndex], err = NewFutresPrice(si); err != nil {
-		log.Println("Futures price ", si, " init error.Err:", err)
 		return
 	}
 
@@ -82,44 +75,28 @@ func (s *Futures) initSymbol(si SymbolInterval) (err error) {
 	return
 }
 
-func (s *Futures) Klines(symbol, interval string) *FuturesKlines {
-	defer func() { <-s.lock }()
-	s.lock <- struct{}{}
+func (s *Futures) Klines(symbol, interval string) []*client.Kline {
+	defer s.mutex.RUnlock()
+	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: interval}
 	if index, ok := s.symbolIndex[si]; ok {
-		return s.klines[index]
+		return s.klinesSrv[index].Klines
 	}
-
-	s.waitingInit <- si
+	s.needInitSymbol <- si
 
 	return nil
 }
 
-func (s *Futures) Depth(symbol string) *FuturesDepth {
-	defer func() { <-s.lock }()
-	s.lock <- struct{}{}
+func (s *Futures) Depth(symbol string) *client.DepthResponse {
+	defer s.mutex.RUnlock()
+	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: ""}
 	if index, ok := s.symbolIndex[si]; ok {
-		return s.depth[index]
+		return s.depthSrv[index].Depth
 	}
-
-	s.waitingInit <- si
-
-	return nil
-}
-
-func (s *Futures) Price(symbol string) *FuturesPrice {
-	defer func() { <-s.lock }()
-	s.lock <- struct{}{}
-
-	si := SymbolInterval{Symbol: symbol, Interval: ""}
-	if index, ok := s.symbolIndex[si]; ok {
-		return s.price[index]
-	}
-
-	s.waitingInit <- si
+	s.needInitSymbol <- si
 
 	return nil
 }

@@ -1,47 +1,97 @@
 package futures
 
 import (
-	"fmt"
+	"context"
+	"log"
+	"sync"
+	"time"
 
 	client "github.com/adshao/go-binance/v2/futures"
 )
 
 type FuturesKlines struct {
-	Klines    [2001]FuturesKline
-	addTrades chan *client.WsAggTradeEvent
-}
-type FuturesKline struct {
-	OpenDate         int64  // 1499040000000,      // 开盘时间
-	OpenPrice        string // "0.01634790",       // 开盘价
-	HighPrice        string // "0.80000000",       // 最高价
-	LowPrice         string // "0.01575800",       // 最低价
-	ClosePrice       string // "0.01577100",       // 收盘价(当前K线未结束的即为最新价)
-	Volume           string // "148976.11427815",  // 成交量
-	CloseDate        int64  // 1499644799999,      // 收盘时间
-	QuoteVolume      string // "2434.19055334",    // 成交额
-	TradeNum         int64  // 308,                // 成交笔数
-	TakerVolume      string // "1756.87402397",    // 主动买入成交量
-	TakerQuoteVolume string // "28.46694368",      // 主动买入成交额
-	Ignore           string // "17928899.62484339" // 请忽略该参数
+	mutex sync.RWMutex
+
+	SI     SymbolInterval
+	Klines []*client.Kline
 }
 
 func NewFutresKlines(si SymbolInterval) (*FuturesKlines, error) {
-	k := &FuturesKlines{}
-
-	fmt.Println("wtf")
-	if _, _, err := client.WsAggTradeServe(si.Symbol, k.wsHandler, k.errHandler); err != nil {
-		fmt.Println("init error:", err)
+	k := &FuturesKlines{
+		SI: si,
+	}
+	if err := k.initWs(); err != nil {
 		return nil, err
 	}
 
 	return k, nil
 }
 
-func (s *FuturesKlines) wsHandler(event *client.WsAggTradeEvent) {
-	fmt.Println(len(s.addTrades), "event:", event)
-	s.addTrades <- event
+func (s *FuturesKlines) initWs() error {
+	client.WebsocketKeepalive = true
+	if _, _, err := client.WsKlineServe(s.SI.Symbol, s.SI.Interval, s.wsHandler, s.errHandler); err != nil {
+		log.Println("kline init ws ", s.SI, " error:", err)
+		return err
+	}
+	log.Println("kline init ws ", s.SI, " success.")
+
+	return nil
+}
+
+func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+
+	if len(s.Klines) == 0 {
+		var err error
+		s.Klines, err = client.NewClient("", "").NewKlinesService().Symbol(s.SI.Symbol).
+			Interval(s.SI.Interval).Limit(1000).Do(context.Background())
+		if err != nil {
+			log.Println("kline ws get klines ", s.SI, ".error:", err)
+			return
+		}
+	}
+
+	kline := &client.Kline{
+		OpenTime:                 event.Kline.StartTime,
+		Open:                     event.Kline.Open,
+		High:                     event.Kline.High,
+		Low:                      event.Kline.Low,
+		Close:                    event.Kline.Close,
+		Volume:                   event.Kline.Volume,
+		CloseTime:                event.Kline.EndTime,
+		QuoteAssetVolume:         event.Kline.QuoteVolume,
+		TradeNum:                 event.Kline.TradeNum,
+		TakerBuyBaseAssetVolume:  event.Kline.ActiveBuyVolume,
+		TakerBuyQuoteAssetVolume: event.Kline.ActiveBuyQuoteVolume,
+	}
+	if len(s.Klines) == 0 {
+		s.Klines = append(s.Klines, kline)
+	}
+
+	if s.Klines[len(s.Klines)-1].OpenTime == kline.OpenTime {
+		s.Klines[len(s.Klines)-1] = kline
+	} else if s.Klines[len(s.Klines)-1].OpenTime < kline.OpenTime {
+		s.Klines = append(s.Klines, kline)
+	}
+
+	if len(s.Klines) > 2000 {
+		s.Klines = s.Klines[len(s.Klines)-2000:]
+	}
 }
 
 func (s *FuturesKlines) errHandler(err error) {
-	fmt.Println("error:", err)
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+
+	log.Println("kline ws err handler ", s.SI, ".error:", err)
+
+	s.Klines = nil
+
+	for {
+		if s.initWs() == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 }
