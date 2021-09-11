@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const ENABLE_FAKE_CANDLE = true
+
 func NewFuturesHandler() func(w http.ResponseWriter, r *http.Request) {
 	handler := &Futures{
 		srv: futures.NewFutures(),
@@ -25,16 +27,18 @@ func (s *Futures) Router(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/fapi/v1/klines":
 		s.klines(w, r)
+
 	case "/fapi/v1/depth":
 		s.depth(w, r)
+
 	default:
 		s.reverseProxy(w, r)
 	}
 }
 
 func (s *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
-	r.Host = "www.binancezh.io"
-	u, _ := url.Parse("https://www.binancezh.io")
+	r.Host = "api.binance.com"
+	u, _ := url.Parse("https://api.binance.com")
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	proxy.ServeHTTP(w, r)
@@ -47,33 +51,25 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 	if limit == "" {
 		limit = "500"
 	}
-
 	limitInt, err := strconv.Atoi(limit)
+
 	switch {
-	case err != nil,
-		limitInt <= 0,
-		limitInt > 1500,
-		r.URL.Query().Get("startTime") != "",
-		r.URL.Query().Get("endTime") != "",
-		symbol == "",
-		interval == "":
-		s.reverseProxy(w, r)
+	case err != nil, limitInt <= 0, limitInt > 1500,
+		r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "",
+		symbol == "", interval == "":
+
+		// Do not forward. So as not to affect normal requests
+		w.Write([]byte(`{"code": -1120,"msg": "Not support startTime and endTime.Symbol and interval is required.Limit must between 0 and 1500."}`))
 		return
 	}
 
 	data := s.srv.Klines(symbol, interval)
-	if data == nil {
-		s.reverseProxy(w, r)
-		return
-	}
-
 	minLen := len(data)
 	if minLen > limitInt {
 		minLen = limitInt
 	}
 
 	klines := make([]interface{}, minLen)
-
 	for i := minLen; i > 0; i-- {
 		ri := len(data) - i
 		klines[minLen-i] = []interface{}{
@@ -91,8 +87,8 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 			"0",
 		}
 	}
-	now := time.Now().UnixNano() / 1e6
-	if len(data) > 0 && now > data[len(data)-1].CloseTime {
+
+	if ENABLE_FAKE_CANDLE && len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
 		klines = append(klines, []interface{}{
 			data[len(data)-1].CloseTime + 1,
 			data[len(data)-1].Close,
@@ -107,8 +103,8 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 			"0.0",
 			"0",
 		})
-		klines = klines[len(klines)-minLen:]
 	}
+	klines = klines[len(klines)-minLen:]
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Data-Source", "websocket")
@@ -120,24 +116,19 @@ func (s *Futures) depth(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 	limit := r.URL.Query().Get("limit")
 	if limit == "" {
-		limit = "500"
+		limit = "20"
 	}
 
 	limitInt, err := strconv.Atoi(limit)
 	switch {
-	case err != nil,
-		symbol == "",
-		limitInt <= 0,
-		limitInt > 1000:
-		s.reverseProxy(w, r)
+	case err != nil, symbol == "", limitInt < 5, limitInt > 20:
+		// Do not forward. So as not to affect normal requests
+		w.Write([]byte(`{"code": -1120,"msg": "Symbol is required.Limit must between 5 and 20."}`))
+
 		return
 	}
 
 	data := s.srv.Depth(symbol)
-	if data == nil {
-		s.reverseProxy(w, r)
-		return
-	}
 	minLen := len(data.Bids)
 	if minLen > len(data.Asks) {
 		minLen = len(data.Asks)
@@ -160,11 +151,11 @@ func (s *Futures) depth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	now := time.Now().UnixNano() / 1e6
+	w.Header().Set("Data-Source", "websocket")
 	j, _ := json.Marshal(map[string]interface{}{
 		"lastUpdateId": data.LastUpdateID,
-		"E":            now,
-		"T":            now,
+		"E":            time.Now().UnixNano() / 1e6,
+		"T":            time.Now().UnixNano() / 1e6,
 		"bids":         bids,
 		"asks":         asks,
 	})

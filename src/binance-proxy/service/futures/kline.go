@@ -4,54 +4,60 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 
 	client "github.com/adshao/go-binance/v2/futures"
 )
 
+const MAX_KLINE_NUM = 2000
+
 type FuturesKlines struct {
 	mutex sync.RWMutex
 
+	waitInit chan struct{}
+
 	SI     SymbolInterval
-	Klines []*client.Kline
+	klines []*client.Kline
 }
 
-func NewFutresKlines(si SymbolInterval) (*FuturesKlines, error) {
+func NewFutresKlines(si SymbolInterval) *FuturesKlines {
 	k := &FuturesKlines{
-		SI: si,
-	}
-	if err := k.initWs(); err != nil {
-		return nil, err
+		SI:       si,
+		waitInit: make(chan struct{}, 0),
 	}
 
-	return k, nil
+	k.initWs()
+
+	return k
 }
 
-func (s *FuturesKlines) initWs() error {
-	client.WebsocketKeepalive = true
-	if _, _, err := client.WsKlineServe(s.SI.Symbol, s.SI.Interval, s.wsHandler, s.errHandler); err != nil {
-		log.Println("kline init ws ", s.SI, " error:", err)
-		return err
-	}
-	log.Println("kline init ws ", s.SI, " success.")
-
-	return nil
-}
-
-func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
+func (s *FuturesKlines) GetKlines() []client.Kline {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
-	if len(s.Klines) == 0 {
-		var err error
-		s.Klines, err = client.NewClient("", "").NewKlinesService().Symbol(s.SI.Symbol).
-			Interval(s.SI.Interval).Limit(1000).Do(context.Background())
-		if err != nil {
-			log.Println("kline ws get klines ", s.SI, ".error:", err)
-			return
+	r := make([]client.Kline, 0)
+	if s.isInited() == false {
+		return r
+	}
+
+	for _, v := range s.klines {
+		if v != nil {
+			r = append(r, *v)
 		}
 	}
 
+	return r
+}
+
+func (s *FuturesKlines) WsHandler(event *client.WsKlineEvent) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+
+	// Init klines
+	if s.klines == nil && s.initApi() != nil {
+		return
+	}
+
+	// Merge kline
 	kline := &client.Kline{
 		OpenTime:                 event.Kline.StartTime,
 		Open:                     event.Kline.Open,
@@ -65,33 +71,60 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 		TakerBuyBaseAssetVolume:  event.Kline.ActiveBuyVolume,
 		TakerBuyQuoteAssetVolume: event.Kline.ActiveBuyQuoteVolume,
 	}
-	if len(s.Klines) == 0 {
-		s.Klines = append(s.Klines, kline)
+	if len(s.klines) == 0 || s.klines[len(s.klines)-1].OpenTime < kline.OpenTime {
+		s.klines = append(s.klines, kline)
+	} else if s.klines[len(s.klines)-1].OpenTime == kline.OpenTime {
+		s.klines[len(s.klines)-1] = kline
 	}
 
-	if s.Klines[len(s.Klines)-1].OpenTime == kline.OpenTime {
-		s.Klines[len(s.Klines)-1] = kline
-	} else if s.Klines[len(s.Klines)-1].OpenTime < kline.OpenTime {
-		s.Klines = append(s.Klines, kline)
-	}
-
-	if len(s.Klines) > 2000 {
-		s.Klines = s.Klines[len(s.Klines)-2000:]
+	if len(s.klines) > MAX_KLINE_NUM {
+		s.klines = s.klines[len(s.klines)-MAX_KLINE_NUM:]
 	}
 }
 
-func (s *FuturesKlines) errHandler(err error) {
+func (s *FuturesKlines) ErrHandler(err error) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
-	log.Println("kline ws err handler ", s.SI, ".error:", err)
+	log.Printf("%s.Websocket throw error!Error:%s", s.SI, err)
 
-	s.Klines = nil
+	// TODO test errhandler action
+	// s.klines = nil
+	// for s.initWs() != nil {
+	// 	time.Sleep(time.Second)
+	// }
+}
 
-	for {
-		if s.initWs() == nil {
-			break
-		}
-		time.Sleep(time.Second)
+func (s *FuturesKlines) isInited() bool {
+	// select {
+	// case ret := <-do():
+	// 	return ret, nil
+	// case <-time.After(timeout):
+	// 	return 0, errors.New("timeout")
+	// }
+	return true
+}
+
+func (s *FuturesKlines) initApi() error {
+	klines, err := client.NewClient("", "").NewKlinesService().
+		Symbol(s.SI.Symbol).Interval(s.SI.Interval).Limit(1500).
+		Do(context.Background())
+	if err != nil {
+		log.Printf("%s.Get initialization klines error!Error:%s", s.SI, err)
+		return err
 	}
+
+	s.klines = klines
+
+	return nil
+}
+
+func (s *FuturesKlines) initWs() error {
+	client.WebsocketKeepalive = true
+	if _, _, err := client.WsKlineServe(s.SI.Symbol, s.SI.Interval, s.WsHandler, s.ErrHandler); err != nil {
+		log.Printf("%s.Init websocket connection error!Error:%s", s.SI, err)
+		return err
+	}
+
+	return nil
 }
