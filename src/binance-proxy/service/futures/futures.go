@@ -27,26 +27,14 @@ func NewFutures() *Futures {
 	return t
 }
 
-func (s *Futures) initSymbol(si SymbolInterval) {
-	defer s.mutex.Unlock()
-	s.mutex.Lock()
-
-	if klineSrv, err := NewFutresKlines(si); err == nil {
-		s.klinesSrv[si] = klineSrv
-	}
-
-	if depthSrv, err := NewFutresDepth(si); err == nil {
-		s.depthSrv[si] = depthSrv
-	}
-
-	return
-}
-
 func (s *Futures) Klines(symbol, interval string) []client.Kline {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: interval}
+	if _, ok := s.klinesSrv[si]; !ok {
+		s.klinesSrv[si] = NewFutresKlines(si)
+	}
 
 	return s.klinesSrv[si].GetKlines()
 }
@@ -56,6 +44,9 @@ func (s *Futures) Depth(symbol string) client.DepthResponse {
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: ""}
+	if _, ok := s.depthSrv[si]; !ok {
+		s.depthSrv[si] = NewFutresDepth(si)
+	}
 
 	return s.depthSrv[si].GetDepth()
 }
