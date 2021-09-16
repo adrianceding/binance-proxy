@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-const ENABLE_FAKE_CANDLE = true
-
 func NewFuturesHandler() func(w http.ResponseWriter, r *http.Request) {
 	handler := &Futures{
 		srv: futures.NewFutures(),
@@ -54,12 +52,12 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 	limitInt, err := strconv.Atoi(limit)
 
 	switch {
-	case err != nil, limitInt <= 0, limitInt > 1500,
+	case err != nil, limitInt <= 0, limitInt > 1000,
 		r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "",
 		symbol == "", interval == "":
 
 		// Do not forward. So as not to affect normal requests
-		w.Write([]byte(`{"code": -1120,"msg": "Not support startTime and endTime.Symbol and interval is required.Limit must between 0 and 1500."}`))
+		w.Write([]byte(`{"code": -1103,"msg": "Not support startTime and endTime.Symbol and interval is required.Limit must between 0 and 1500."}`))
 		return
 	}
 
@@ -87,24 +85,6 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 			"0",
 		}
 	}
-
-	if ENABLE_FAKE_CANDLE && len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
-		klines = append(klines, []interface{}{
-			data[len(data)-1].CloseTime + 1,
-			data[len(data)-1].Close,
-			data[len(data)-1].Close,
-			data[len(data)-1].Close,
-			data[len(data)-1].Close,
-			"0.0",
-			data[len(data)-1].CloseTime + 1 + (data[len(data)-1].CloseTime - data[len(data)-1].OpenTime),
-			"0.0",
-			0,
-			"0.0",
-			"0.0",
-			"0",
-		})
-	}
-	klines = klines[len(klines)-minLen:]
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Data-Source", "websocket")

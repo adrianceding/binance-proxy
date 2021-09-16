@@ -1,9 +1,9 @@
-package futures
+package spot
 
 import (
 	"sync"
 
-	client "github.com/adshao/go-binance/v2/futures"
+	client "github.com/adshao/go-binance/v2"
 )
 
 type SymbolInterval struct {
@@ -11,23 +11,23 @@ type SymbolInterval struct {
 	Interval string
 }
 
-type Futures struct {
+type Spot struct {
 	mutex sync.RWMutex
 
-	klinesSrv map[SymbolInterval]*FuturesKlines
-	depthSrv  map[SymbolInterval]*FuturesDepth
+	klinesSrv map[SymbolInterval]*SpotKlines
+	depthSrv  map[SymbolInterval]*SpotDepth
 }
 
-func NewFutures() *Futures {
-	t := &Futures{
-		klinesSrv: make(map[SymbolInterval]*FuturesKlines),
-		depthSrv:  make(map[SymbolInterval]*FuturesDepth),
+func NewSpot() *Spot {
+	t := &Spot{
+		klinesSrv: make(map[SymbolInterval]*SpotKlines),
+		depthSrv:  make(map[SymbolInterval]*SpotDepth),
 	}
 
 	return t
 }
 
-func (s *Futures) Klines(symbol, interval string) []client.Kline {
+func (s *Spot) Klines(symbol, interval string) []client.Kline {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
@@ -39,7 +39,7 @@ func (s *Futures) Klines(symbol, interval string) []client.Kline {
 	return s.klinesSrv[si].GetKlines()
 }
 
-func (s *Futures) Depth(symbol string) client.DepthResponse {
+func (s *Spot) Depth(symbol string) client.DepthResponse {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 

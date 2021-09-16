@@ -1,14 +1,14 @@
-package futures
+package spot
 
 import (
 	"log"
 	"sync"
 	"time"
 
-	client "github.com/adshao/go-binance/v2/futures"
+	client "github.com/adshao/go-binance/v2"
 )
 
-type FuturesDepth struct {
+type SpotDepth struct {
 	mutex sync.RWMutex
 
 	stopC chan struct{}
@@ -16,11 +16,11 @@ type FuturesDepth struct {
 	depth *client.DepthResponse
 }
 
-func NewFutresDepth(si SymbolInterval) *FuturesDepth {
-	return &FuturesDepth{si: si, stopC: make(chan struct{})}
+func NewFutresDepth(si SymbolInterval) *SpotDepth {
+	return &SpotDepth{si: si, stopC: make(chan struct{})}
 }
 
-func (s *FuturesDepth) Start() {
+func (s *SpotDepth) Start() {
 	go func() {
 		loop := 1
 		for {
@@ -29,7 +29,7 @@ func (s *FuturesDepth) Start() {
 			s.mutex.Unlock()
 
 			client.WebsocketKeepalive = true
-			doneC, stopC, err := client.WsPartialDepthServeWithRate(s.si.Symbol, 20, 100*time.Millisecond, s.wsHandler, s.errHandler)
+			doneC, stopC, err := client.WsPartialDepthServe100Ms(s.si.Symbol, "20", s.wsHandler, s.errHandler)
 			if err == nil {
 				loop = 1
 				select {
@@ -48,11 +48,11 @@ func (s *FuturesDepth) Start() {
 	}()
 }
 
-func (s *FuturesDepth) Stop() {
+func (s *SpotDepth) Stop() {
 	s.stopC <- struct{}{}
 }
 
-func (s *FuturesDepth) wsHandler(event *client.WsDepthEvent) {
+func (s *SpotDepth) wsHandler(event *client.WsPartialDepthEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -63,11 +63,11 @@ func (s *FuturesDepth) wsHandler(event *client.WsDepthEvent) {
 	}
 }
 
-func (s *FuturesDepth) errHandler(err error) {
+func (s *SpotDepth) errHandler(err error) {
 	log.Printf("%s.Depth websocket throw error!Error:%s", s.si, err)
 }
 
-func (s *FuturesDepth) GetDepth() client.DepthResponse {
+func (s *SpotDepth) GetDepth() client.DepthResponse {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 

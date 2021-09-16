@@ -1,4 +1,4 @@
-package futures
+package spot
 
 import (
 	"container/list"
@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	client "github.com/adshao/go-binance/v2/futures"
+	client "github.com/adshao/go-binance/v2"
 )
 
-type FuturesKlines struct {
+type SpotKlines struct {
 	mutex sync.RWMutex
 
 	stopC  chan struct{}
@@ -18,11 +18,11 @@ type FuturesKlines struct {
 	klines *list.List
 }
 
-func NewFutresKlines(si SymbolInterval) *FuturesKlines {
-	return &FuturesKlines{si: si, stopC: make(chan struct{})}
+func NewFutresKlines(si SymbolInterval) *SpotKlines {
+	return &SpotKlines{si: si, stopC: make(chan struct{})}
 }
 
-func (s *FuturesKlines) Start() {
+func (s *SpotKlines) Start() {
 	go func() {
 		loop := 1
 		for {
@@ -50,11 +50,11 @@ func (s *FuturesKlines) Start() {
 	}()
 }
 
-func (s *FuturesKlines) Stop() {
+func (s *SpotKlines) Stop() {
 	s.stopC <- struct{}{}
 }
 
-func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
+func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -62,7 +62,7 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 		loop := 1
 		for {
 			klines, err := client.NewClient("", "").NewKlinesService().
-				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1500).
+				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 				Do(context.Background())
 			if err == nil {
 				s.klines = list.New()
@@ -107,11 +107,11 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 	}
 }
 
-func (s *FuturesKlines) errHandler(err error) {
+func (s *SpotKlines) errHandler(err error) {
 	log.Printf("%s.Kline websocket throw error!Error:%s", s.si, err)
 }
 
-func (s *FuturesKlines) GetKlines() []client.Kline {
+func (s *SpotKlines) GetKlines() []client.Kline {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
