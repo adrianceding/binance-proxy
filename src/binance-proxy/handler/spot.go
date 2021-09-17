@@ -3,7 +3,6 @@ package handler
 import (
 	"binance-proxy/service/spot"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -30,8 +29,10 @@ func (s *Spot) Router(w http.ResponseWriter, r *http.Request) {
 	case "/api/v3/depth":
 		s.depth(w, r)
 
+	case "/api/v3/exchangeInfo":
+		s.exchangeInfo(w, r)
+
 	default:
-		log.Printf("why!!!!!!!!!")
 		s.reverseProxy(w, r)
 	}
 }
@@ -42,6 +43,12 @@ func (s *Spot) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	proxy.ServeHTTP(w, r)
+}
+
+func (s *Spot) exchangeInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Data-Source", "apicache")
+	w.Write(s.srv.ExchangeInfo())
 }
 
 func (s *Spot) klines(w http.ResponseWriter, r *http.Request) {

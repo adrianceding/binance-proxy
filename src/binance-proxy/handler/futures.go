@@ -29,6 +29,9 @@ func (s *Futures) Router(w http.ResponseWriter, r *http.Request) {
 	case "/fapi/v1/depth":
 		s.depth(w, r)
 
+	case "/fapi/v1/exchangeInfo":
+		s.exchangeInfo(w, r)
+
 	default:
 		s.reverseProxy(w, r)
 	}
@@ -40,6 +43,12 @@ func (s *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	proxy.ServeHTTP(w, r)
+}
+
+func (s *Futures) exchangeInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Data-Source", "apicache")
+	w.Write(s.srv.ExchangeInfo())
 }
 
 func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {

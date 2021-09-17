@@ -19,32 +19,33 @@ type FuturesKlines struct {
 }
 
 func NewFutresKlines(si SymbolInterval) *FuturesKlines {
-	return &FuturesKlines{si: si, stopC: make(chan struct{})}
+	s := &FuturesKlines{si: si, stopC: make(chan struct{}, 1)}
+	s.start()
+	return s
 }
 
-func (s *FuturesKlines) Start() {
+func (s *FuturesKlines) start() {
 	go func() {
-		loop := 1
-		for {
+		for delay := 1; ; delay *= 2 {
+			if delay > 60 {
+				delay = 60
+			}
+			time.Sleep(time.Second * time.Duration(delay-1))
+
 			s.mutex.Lock()
 			s.klines = nil
 			s.mutex.Unlock()
 
 			client.WebsocketKeepalive = true
 			doneC, stopC, err := client.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandler, s.errHandler)
-			if err == nil {
-				loop = 1
-				select {
-				case stopC <- <-s.stopC:
-					return
-				case <-doneC:
-				}
+			if err != nil {
+				continue
 			}
 
-			time.Sleep(time.Second * time.Duration(loop))
-
-			if loop < 60 {
-				loop *= 2
+			select {
+			case stopC <- <-s.stopC:
+				return
+			case <-doneC:
 			}
 		}
 	}()
@@ -59,25 +60,25 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 	s.mutex.Lock()
 
 	if s.klines == nil {
-		loop := 1
-		for {
+		for delay := 1; ; delay *= 2 {
+			if delay > 60 {
+				delay = 60
+			}
+			time.Sleep(time.Second * time.Duration(delay-1))
+
 			klines, err := client.NewClient("", "").NewKlinesService().
 				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1500).
 				Do(context.Background())
-			if err == nil {
-				s.klines = list.New()
-				for v := range klines {
-					s.klines.PushBack(v)
-				}
-				break
+			if err != nil {
+				log.Printf("%s.Get initialization klines error!Error:%s", s.si, err)
+				continue
 			}
 
-			log.Printf("%s.Get initialization klines error!Error:%s", s.si, err)
-			time.Sleep(time.Second * time.Duration(loop))
-
-			if loop < 60 {
-				loop *= 2
+			s.klines = list.New()
+			for v := range klines {
+				s.klines.PushBack(v)
 			}
+			break
 		}
 	}
 

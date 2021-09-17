@@ -17,32 +17,34 @@ type FuturesDepth struct {
 }
 
 func NewFutresDepth(si SymbolInterval) *FuturesDepth {
-	return &FuturesDepth{si: si, stopC: make(chan struct{})}
+	s := &FuturesDepth{si: si, stopC: make(chan struct{}, 1)}
+	s.start()
+	return s
 }
 
-func (s *FuturesDepth) Start() {
+func (s *FuturesDepth) start() {
 	go func() {
-		loop := 1
-		for {
+		for delay := 1; ; delay *= 2 {
+			if delay > 60 {
+				delay = 60
+			}
+			time.Sleep(time.Second * time.Duration(delay-1))
+
 			s.mutex.Lock()
 			s.depth = nil
 			s.mutex.Unlock()
 
 			client.WebsocketKeepalive = true
 			doneC, stopC, err := client.WsPartialDepthServeWithRate(s.si.Symbol, 20, 100*time.Millisecond, s.wsHandler, s.errHandler)
-			if err == nil {
-				loop = 1
-				select {
-				case stopC <- <-s.stopC:
-					return
-				case <-doneC:
-				}
+			if err != nil {
+
+				continue
 			}
 
-			time.Sleep(time.Second * time.Duration(loop))
-
-			if loop < 60 {
-				loop *= 2
+			select {
+			case stopC <- <-s.stopC:
+				return
+			case <-doneC:
 			}
 		}
 	}()
