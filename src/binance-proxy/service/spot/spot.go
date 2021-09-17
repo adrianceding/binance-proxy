@@ -20,15 +20,12 @@ type Spot struct {
 
 	rawExchangeInfo []byte
 
-	klinesSrv map[SymbolInterval]*SpotKlines
-	depthSrv  map[SymbolInterval]*SpotDepth
+	klinesSrv sync.Map // map[SymbolInterval]*SpotKlines
+	depthSrv  sync.Map // map[SymbolInterval]*SpotDepth
 }
 
 func NewSpot() *Spot {
-	t := &Spot{
-		klinesSrv: make(map[SymbolInterval]*SpotKlines),
-		depthSrv:  make(map[SymbolInterval]*SpotDepth),
-	}
+	t := &Spot{}
 
 	t.start()
 
@@ -84,11 +81,13 @@ func (s *Spot) Klines(symbol, interval string) []client.Kline {
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: interval}
-	if _, ok := s.klinesSrv[si]; !ok {
-		return nil
+	v, loaded := s.klinesSrv.LoadOrStore(si, NewSpotKlines(si))
+	srv := v.(*SpotKlines)
+	if loaded == false {
+		srv.Start()
 	}
 
-	return s.klinesSrv[si].GetKlines()
+	return srv.GetKlines()
 }
 
 func (s *Spot) Depth(symbol string) client.DepthResponse {
@@ -96,9 +95,11 @@ func (s *Spot) Depth(symbol string) client.DepthResponse {
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: ""}
-	if _, ok := s.depthSrv[si]; !ok {
-		return client.DepthResponse{}
+	v, loaded := s.klinesSrv.LoadOrStore(si, NewSpotDepth(si))
+	srv := v.(*SpotDepth)
+	if loaded == false {
+		srv.Start()
 	}
 
-	return s.depthSrv[si].GetDepth()
+	return srv.GetDepth()
 }

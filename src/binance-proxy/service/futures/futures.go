@@ -20,15 +20,12 @@ type Futures struct {
 
 	rawExchangeInfo []byte
 
-	klinesSrv map[SymbolInterval]*FuturesKlines
-	depthSrv  map[SymbolInterval]*FuturesDepth
+	klinesSrv sync.Map // map[SymbolInterval]*FuturesKlines
+	depthSrv  sync.Map // map[SymbolInterval]*FuturesDepth
 }
 
 func NewFutures() *Futures {
-	s := &Futures{
-		klinesSrv: make(map[SymbolInterval]*FuturesKlines),
-		depthSrv:  make(map[SymbolInterval]*FuturesDepth),
-	}
+	s := &Futures{}
 	s.start()
 	return s
 }
@@ -82,11 +79,13 @@ func (s *Futures) Klines(symbol, interval string) []client.Kline {
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: interval}
-	if _, ok := s.klinesSrv[si]; !ok {
-		return nil
+	v, loaded := s.klinesSrv.LoadOrStore(si, NewFuturesKlines(si))
+	srv := v.(*FuturesKlines)
+	if loaded == false {
+		srv.Start()
 	}
 
-	return s.klinesSrv[si].GetKlines()
+	return srv.GetKlines()
 }
 
 func (s *Futures) Depth(symbol string) client.DepthResponse {
@@ -94,9 +93,11 @@ func (s *Futures) Depth(symbol string) client.DepthResponse {
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: ""}
-	if _, ok := s.depthSrv[si]; !ok {
-		return client.DepthResponse{}
+	v, loaded := s.klinesSrv.LoadOrStore(si, NewFuturesDepth(si))
+	srv := v.(*FuturesDepth)
+	if loaded == false {
+		srv.Start()
 	}
 
-	return s.depthSrv[si].GetDepth()
+	return srv.GetDepth()
 }

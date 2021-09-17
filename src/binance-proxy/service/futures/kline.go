@@ -13,18 +13,27 @@ import (
 type FuturesKlines struct {
 	mutex sync.RWMutex
 
+	onceStart  sync.Once
+	onceInited sync.Once
+	onceStop   sync.Once
+
+	inited chan struct{}
 	stopC  chan struct{}
-	si     SymbolInterval
-	klines *list.List
+
+	si         SymbolInterval
+	klines     *list.List
+	updateTime time.Time
 }
 
-func NewFutresKlines(si SymbolInterval) *FuturesKlines {
-	s := &FuturesKlines{si: si, stopC: make(chan struct{}, 1)}
-	s.start()
-	return s
+func NewFuturesKlines(si SymbolInterval) *FuturesKlines {
+	return &FuturesKlines{
+		si:     si,
+		stopC:  make(chan struct{}, 1),
+		inited: make(chan struct{}),
+	}
 }
 
-func (s *FuturesKlines) start() {
+func (s *FuturesKlines) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			if delay > 60 {
@@ -32,16 +41,22 @@ func (s *FuturesKlines) start() {
 			}
 			time.Sleep(time.Second * time.Duration(delay-1))
 
+			log.Printf("%s.111!", s.si)
 			s.mutex.Lock()
 			s.klines = nil
 			s.mutex.Unlock()
 
 			client.WebsocketKeepalive = true
+
+			log.Printf("%s.Initint websocket klines!", s.si)
 			doneC, stopC, err := client.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandler, s.errHandler)
 			if err != nil {
+				log.Printf("%s.Init websocket klines error!Error:%s", s.si, err)
 				continue
 			}
+			log.Printf("%s.Init websocket klines success!", s.si)
 
+			delay = 1
 			select {
 			case stopC <- <-s.stopC:
 				return
@@ -52,7 +67,9 @@ func (s *FuturesKlines) start() {
 }
 
 func (s *FuturesKlines) Stop() {
-	s.stopC <- struct{}{}
+	s.onceStop.Do(func() {
+		s.stopC <- struct{}{}
+	})
 }
 
 func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
@@ -70,12 +87,12 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1500).
 				Do(context.Background())
 			if err != nil {
-				log.Printf("%s.Get initialization klines error!Error:%s", s.si, err)
+				log.Printf("%s.Get initialization api klines error!Error:%s", s.si, err)
 				continue
 			}
 
 			s.klines = list.New()
-			for v := range klines {
+			for _, v := range klines {
 				s.klines.PushBack(v)
 			}
 			break
@@ -106,6 +123,11 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 	for s.klines.Len() > 1000 {
 		s.klines.Remove(s.klines.Front())
 	}
+	s.updateTime = time.Now()
+
+	s.onceInited.Do(func() {
+		close(s.inited)
+	})
 }
 
 func (s *FuturesKlines) errHandler(err error) {
@@ -113,11 +135,19 @@ func (s *FuturesKlines) errHandler(err error) {
 }
 
 func (s *FuturesKlines) GetKlines() []client.Kline {
+	<-s.inited
+
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
-	res := make([]client.Kline, s.klines.Len())
+	// if time.Now().Sub(s.updateTime).Seconds() > 5 {
+	// 	return nil
+	// }
+	if s.klines == nil {
+		return nil
+	}
 
+	res := make([]client.Kline, s.klines.Len())
 	for elems := s.klines.Front(); elems != nil; elems = elems.Next() {
 		res = append(res, *(elems.Value.(*client.Kline)))
 	}

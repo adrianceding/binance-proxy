@@ -13,18 +13,27 @@ import (
 type SpotKlines struct {
 	mutex sync.RWMutex
 
+	onceStart  sync.Once
+	onceInited sync.Once
+	onceStop   sync.Once
+
+	inited chan struct{}
 	stopC  chan struct{}
-	si     SymbolInterval
-	klines *list.List
+
+	si         SymbolInterval
+	klines     *list.List
+	updateTime time.Time
 }
 
-func NewFutresKlines(si SymbolInterval) *SpotKlines {
-	s := &SpotKlines{si: si, stopC: make(chan struct{}, 1)}
-	s.start()
-	return s
+func NewSpotKlines(si SymbolInterval) *SpotKlines {
+	return &SpotKlines{
+		si:     si,
+		stopC:  make(chan struct{}, 1),
+		inited: make(chan struct{}),
+	}
 }
 
-func (s *SpotKlines) start() {
+func (s *SpotKlines) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			if delay > 60 {
@@ -42,6 +51,7 @@ func (s *SpotKlines) start() {
 				continue
 			}
 
+			delay = 1
 			select {
 			case stopC <- <-s.stopC:
 				return
@@ -52,7 +62,9 @@ func (s *SpotKlines) start() {
 }
 
 func (s *SpotKlines) Stop() {
-	s.stopC <- struct{}{}
+	s.onceStop.Do(func() {
+		s.stopC <- struct{}{}
+	})
 }
 
 func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
@@ -74,7 +86,7 @@ func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
 			}
 
 			s.klines = list.New()
-			for v := range klines {
+			for _, v := range klines {
 				s.klines.PushBack(v)
 			}
 			break
@@ -105,6 +117,11 @@ func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
 	for s.klines.Len() > 1000 {
 		s.klines.Remove(s.klines.Front())
 	}
+	s.updateTime = time.Now()
+
+	s.onceInited.Do(func() {
+		close(s.inited)
+	})
 }
 
 func (s *SpotKlines) errHandler(err error) {
@@ -112,11 +129,19 @@ func (s *SpotKlines) errHandler(err error) {
 }
 
 func (s *SpotKlines) GetKlines() []client.Kline {
+	<-s.inited
+
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
-	res := make([]client.Kline, s.klines.Len())
+	// if time.Now().Sub(s.updateTime).Seconds() > 5 {
+	// 	return nil
+	// }
+	if s.klines == nil {
+		return nil
+	}
 
+	res := make([]client.Kline, s.klines.Len())
 	for elems := s.klines.Front(); elems != nil; elems = elems.Next() {
 		res = append(res, *(elems.Value.(*client.Kline)))
 	}

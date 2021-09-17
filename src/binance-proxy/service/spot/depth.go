@@ -11,18 +11,27 @@ import (
 type SpotDepth struct {
 	mutex sync.RWMutex
 
-	stopC chan struct{}
-	si    SymbolInterval
-	depth *client.DepthResponse
+	onceStart  sync.Once
+	onceInited sync.Once
+	onceStop   sync.Once
+
+	inited chan struct{}
+	stopC  chan struct{}
+
+	si         SymbolInterval
+	depth      *client.DepthResponse
+	updateTime time.Time
 }
 
-func NewFutresDepth(si SymbolInterval) *SpotDepth {
-	s := &SpotDepth{si: si, stopC: make(chan struct{}, 1)}
-	s.start()
-	return s
+func NewSpotDepth(si SymbolInterval) *SpotDepth {
+	return &SpotDepth{
+		si:     si,
+		stopC:  make(chan struct{}, 1),
+		inited: make(chan struct{}),
+	}
 }
 
-func (s *SpotDepth) start() {
+func (s *SpotDepth) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			if delay > 60 {
@@ -40,6 +49,7 @@ func (s *SpotDepth) start() {
 				continue
 			}
 
+			delay = 1
 			select {
 			case stopC <- <-s.stopC:
 				return
@@ -50,7 +60,9 @@ func (s *SpotDepth) start() {
 }
 
 func (s *SpotDepth) Stop() {
-	s.stopC <- struct{}{}
+	s.onceStop.Do(func() {
+		s.stopC <- struct{}{}
+	})
 }
 
 func (s *SpotDepth) wsHandler(event *client.WsPartialDepthEvent) {
@@ -62,6 +74,11 @@ func (s *SpotDepth) wsHandler(event *client.WsPartialDepthEvent) {
 		Bids:         event.Bids,
 		Asks:         event.Asks,
 	}
+	s.updateTime = time.Now()
+
+	s.onceInited.Do(func() {
+		close(s.inited)
+	})
 }
 
 func (s *SpotDepth) errHandler(err error) {
@@ -69,10 +86,15 @@ func (s *SpotDepth) errHandler(err error) {
 }
 
 func (s *SpotDepth) GetDepth() client.DepthResponse {
+	<-s.inited
+
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
 	var t client.DepthResponse
+	// if time.Now().Sub(s.updateTime).Seconds() > 5 {
+	// 	return t
+	// }
 	if s.depth != nil {
 		t = *s.depth
 	}
