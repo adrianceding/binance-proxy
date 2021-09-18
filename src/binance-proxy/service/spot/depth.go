@@ -9,7 +9,7 @@ import (
 	client "github.com/adshao/go-binance/v2"
 )
 
-type SpotDepthSrv struct {
+type DepthSrv struct {
 	mutex sync.RWMutex
 
 	onceStart  sync.Once
@@ -25,8 +25,8 @@ type SpotDepthSrv struct {
 	updateTime time.Time
 }
 
-func NewSpotDepthSrv(si SymbolInterval) *SpotDepthSrv {
-	return &SpotDepthSrv{
+func NewDepthSrv(si SymbolInterval) *DepthSrv {
+	return &DepthSrv{
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
@@ -34,7 +34,7 @@ func NewSpotDepthSrv(si SymbolInterval) *SpotDepthSrv {
 	}
 }
 
-func (s *SpotDepthSrv) Start() {
+func (s *DepthSrv) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			s.mutex.Lock()
@@ -65,13 +65,13 @@ func (s *SpotDepthSrv) Start() {
 	}()
 }
 
-func (s *SpotDepthSrv) Stop() {
+func (s *DepthSrv) Stop() {
 	s.onceStop.Do(func() {
 		s.stopC <- struct{}{}
 	})
 }
 
-func (s *SpotDepthSrv) wsHandler(event *client.WsPartialDepthEvent) {
+func (s *DepthSrv) wsHandler(event *client.WsPartialDepthEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -88,12 +88,12 @@ func (s *SpotDepthSrv) wsHandler(event *client.WsPartialDepthEvent) {
 	})
 }
 
-func (s *SpotDepthSrv) errHandler(err error) {
+func (s *DepthSrv) errHandler(err error) {
 	log.Errorf("%s.Spot depth websocket throw error!Error:%s", s.si, err)
 	s.errorC <- struct{}{}
 }
 
-func (s *SpotDepthSrv) GetDepth() (*client.DepthResponse, time.Time) {
+func (s *DepthSrv) GetDepth() (*client.DepthResponse, time.Time) {
 	<-s.inited
 
 	defer s.mutex.Unlock()

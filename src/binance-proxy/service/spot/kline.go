@@ -11,7 +11,7 @@ import (
 	client "github.com/adshao/go-binance/v2"
 )
 
-type SpotKlinesSrv struct {
+type KlinesSrv struct {
 	mutex sync.RWMutex
 
 	onceStart  sync.Once
@@ -27,8 +27,8 @@ type SpotKlinesSrv struct {
 	updateTime time.Time
 }
 
-func NewSpotKlinesSrv(si SymbolInterval) *SpotKlinesSrv {
-	return &SpotKlinesSrv{
+func NewKlinesSrv(si SymbolInterval) *KlinesSrv {
+	return &KlinesSrv{
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
@@ -36,7 +36,7 @@ func NewSpotKlinesSrv(si SymbolInterval) *SpotKlinesSrv {
 	}
 }
 
-func (s *SpotKlinesSrv) Start() {
+func (s *KlinesSrv) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			s.mutex.Lock()
@@ -67,13 +67,13 @@ func (s *SpotKlinesSrv) Start() {
 	}()
 }
 
-func (s *SpotKlinesSrv) Stop() {
+func (s *KlinesSrv) Stop() {
 	s.onceStop.Do(func() {
 		s.stopC <- struct{}{}
 	})
 }
 
-func (s *SpotKlinesSrv) wsHandler(event *client.WsKlineEvent) {
+func (s *KlinesSrv) wsHandler(event *client.WsKlineEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -131,12 +131,12 @@ func (s *SpotKlinesSrv) wsHandler(event *client.WsKlineEvent) {
 	})
 }
 
-func (s *SpotKlinesSrv) errHandler(err error) {
+func (s *KlinesSrv) errHandler(err error) {
 	log.Errorf("%s.Spot klines websocket throw error!Error:%s", s.si, err)
 	s.errorC <- struct{}{}
 }
 
-func (s *SpotKlinesSrv) GetKlines() []client.Kline {
+func (s *KlinesSrv) GetKlines() []client.Kline {
 	<-s.inited
 
 	defer s.mutex.RUnlock()
