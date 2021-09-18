@@ -35,7 +35,7 @@ func (s *DelayIterator) Reset() {
 
 func (s *DelayIterator) Delay() {
 	if s.index >= len(s.delayList) {
-		time.Sleep(s.delayList[len(s.delayList)])
+		time.Sleep(s.delayList[len(s.delayList)-1])
 	} else {
 		time.Sleep(s.delayList[s.index])
 		s.index++
