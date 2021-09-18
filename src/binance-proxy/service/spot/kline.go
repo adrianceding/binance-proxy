@@ -19,6 +19,7 @@ type SpotKlines struct {
 
 	inited chan struct{}
 	stopC  chan struct{}
+	errorC chan struct{}
 
 	si         SymbolInterval
 	klines     *list.List
@@ -30,24 +31,26 @@ func NewSpotKlines(si SymbolInterval) *SpotKlines {
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
+		errorC: make(chan struct{}, 1),
 	}
 }
 
 func (s *SpotKlines) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
+			s.mutex.Lock()
+			s.klines = nil
+			s.mutex.Unlock()
+
 			if delay > 60 {
 				delay = 60
 			}
 			time.Sleep(time.Second * time.Duration(delay-1))
 
-			s.mutex.Lock()
-			s.klines = nil
-			s.mutex.Unlock()
-
 			client.WebsocketKeepalive = true
 			doneC, stopC, err := client.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandler, s.errHandler)
 			if err != nil {
+				log.Printf("%s.Spot websocket klines connect error!Error:%s", s.si, err)
 				continue
 			}
 
@@ -56,7 +59,9 @@ func (s *SpotKlines) Start() {
 			case stopC <- <-s.stopC:
 				return
 			case <-doneC:
+			case <-s.errorC:
 			}
+			log.Printf("%s.Spot websocket klines connect out!Reconnecting", s.si)
 		}
 	}()
 }
@@ -120,12 +125,14 @@ func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
+		log.Printf("%s.Spot klines init success!", s.si)
 		close(s.inited)
 	})
 }
 
 func (s *SpotKlines) errHandler(err error) {
-	log.Printf("%s.Kline websocket throw error!Error:%s", s.si, err)
+	log.Printf("%s.Spot klines websocket throw error!Error:%s", s.si, err)
+	s.errorC <- struct{}{}
 }
 
 func (s *SpotKlines) GetKlines() []client.Kline {
@@ -142,8 +149,14 @@ func (s *SpotKlines) GetKlines() []client.Kline {
 	}
 
 	res := make([]client.Kline, s.klines.Len())
-	for elems := s.klines.Front(); elems != nil; elems = elems.Next() {
-		res = append(res, *(elems.Value.(*client.Kline)))
+	elems := s.klines.Front()
+	for i := 0; ; i++ {
+		if elems == nil {
+			break
+		} else {
+			res[i] = *(elems.Value.(*client.Kline))
+		}
+		elems = elems.Next()
 	}
 
 	return res

@@ -17,6 +17,7 @@ type SpotDepth struct {
 
 	inited chan struct{}
 	stopC  chan struct{}
+	errorC chan struct{}
 
 	si         SymbolInterval
 	depth      *client.DepthResponse
@@ -28,24 +29,26 @@ func NewSpotDepth(si SymbolInterval) *SpotDepth {
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
+		errorC: make(chan struct{}, 1),
 	}
 }
 
 func (s *SpotDepth) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
+			s.mutex.Lock()
+			s.depth = nil
+			s.mutex.Unlock()
+
 			if delay > 60 {
 				delay = 60
 			}
 			time.Sleep(time.Second * time.Duration(delay-1))
 
-			s.mutex.Lock()
-			s.depth = nil
-			s.mutex.Unlock()
-
 			client.WebsocketKeepalive = true
 			doneC, stopC, err := client.WsPartialDepthServe100Ms(s.si.Symbol, "20", s.wsHandler, s.errHandler)
 			if err != nil {
+				log.Printf("%s.Spot websocket depth connect error!Error:%s", s.si, err)
 				continue
 			}
 
@@ -54,7 +57,9 @@ func (s *SpotDepth) Start() {
 			case stopC <- <-s.stopC:
 				return
 			case <-doneC:
+			case <-s.errorC:
 			}
+			log.Printf("%s.Spot websocket depth connect out!Reconnecting", s.si)
 		}
 	}()
 }
@@ -77,12 +82,14 @@ func (s *SpotDepth) wsHandler(event *client.WsPartialDepthEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
+		log.Printf("%s.Spot depth init success!", s.si)
 		close(s.inited)
 	})
 }
 
 func (s *SpotDepth) errHandler(err error) {
-	log.Printf("%s.Depth websocket throw error!Error:%s", s.si, err)
+	log.Printf("%s.Spot depth websocket throw error!Error:%s", s.si, err)
+	s.errorC <- struct{}{}
 }
 
 func (s *SpotDepth) GetDepth() client.DepthResponse {

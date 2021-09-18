@@ -60,13 +60,14 @@ func (s *Spot) start() {
 
 				data, err := s.getExchangeInfo()
 				if err != nil {
-					log.Printf("Get spot exchange info error!Error:%s", err)
+					log.Printf("Spot exchangeInfo init error!Error:%s", err)
 					continue
 				}
 
 				s.mutex.Lock()
 				s.rawExchangeInfo = data
 				s.mutex.Unlock()
+				log.Printf("Spot exchangeInfo update success!")
 
 				break
 			}

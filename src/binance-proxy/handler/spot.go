@@ -3,6 +3,7 @@ package handler
 import (
 	"binance-proxy/service/spot"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -33,6 +34,7 @@ func (s *Spot) Router(w http.ResponseWriter, r *http.Request) {
 		s.exchangeInfo(w, r)
 
 	default:
+		log.Printf("Spot reverse proxy.Path:%s", r.URL.Path)
 		s.reverseProxy(w, r)
 	}
 }

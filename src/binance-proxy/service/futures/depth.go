@@ -17,6 +17,7 @@ type FuturesDepth struct {
 
 	inited chan struct{}
 	stopC  chan struct{}
+	errorC chan struct{}
 
 	si         SymbolInterval
 	depth      *client.DepthResponse
@@ -28,6 +29,7 @@ func NewFuturesDepth(si SymbolInterval) *FuturesDepth {
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
+		errorC: make(chan struct{}, 1),
 	}
 }
 
@@ -58,18 +60,19 @@ func (s *FuturesDepth) Start() {
 	s.onceStart.Do(func() {
 		go func() {
 			for delay := 1; ; delay *= 2 {
+				s.mutex.Lock()
+				s.depth = nil
+				s.mutex.Unlock()
+
 				if delay > 60 {
 					delay = 60
 				}
 				time.Sleep(time.Second * time.Duration(delay-1))
 
-				s.mutex.Lock()
-				s.depth = nil
-				s.mutex.Unlock()
-
 				client.WebsocketKeepalive = true
 				doneC, stopC, err := client.WsPartialDepthServeWithRate(s.si.Symbol, 20, 100*time.Millisecond, s.wsHandler, s.errHandler)
 				if err != nil {
+					log.Printf("%s.Futures websocket depth connect error!Error:%s", s.si, err)
 					continue
 				}
 
@@ -78,7 +81,9 @@ func (s *FuturesDepth) Start() {
 				case stopC <- <-s.stopC:
 					return
 				case <-doneC:
+				case <-s.errorC:
 				}
+				log.Printf("%s.Futures websocket depth connect out!Reconnecting", s.si)
 			}
 		}()
 	})
@@ -96,10 +101,12 @@ func (s *FuturesDepth) wsHandler(event *client.WsDepthEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
+		log.Printf("%s.Futures depth init success!", s.si)
 		close(s.inited)
 	})
 }
 
 func (s *FuturesDepth) errHandler(err error) {
-	log.Printf("%s.Depth websocket throw error!Error:%s", s.si, err)
+	log.Printf("%s.Futures depth websocket throw error!Error:%s", s.si, err)
+	s.errorC <- struct{}{}
 }

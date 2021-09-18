@@ -3,6 +3,7 @@ package handler
 import (
 	"binance-proxy/service/futures"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -33,13 +34,14 @@ func (s *Futures) Router(w http.ResponseWriter, r *http.Request) {
 		s.exchangeInfo(w, r)
 
 	default:
+		log.Printf("Futures reverse proxy.Path:%s", r.URL.Path)
 		s.reverseProxy(w, r)
 	}
 }
 
 func (s *Futures) reverseProxy(w http.ResponseWriter, r *http.Request) {
-	r.Host = "api.binance.com"
-	u, _ := url.Parse("https://api.binance.com")
+	r.Host = "fapi.binance.com"
+	u, _ := url.Parse("https://fapi.binance.com")
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	proxy.ServeHTTP(w, r)
@@ -66,7 +68,7 @@ func (s *Futures) klines(w http.ResponseWriter, r *http.Request) {
 		symbol == "", interval == "":
 
 		// Do not forward. So as not to affect normal requests
-		w.Write([]byte(`{"code": -1103,"msg": "Not support startTime and endTime.Symbol and interval is required.Limit must between 0 and 1500."}`))
+		w.Write([]byte(`{"code": -1103,"msg": "Not support startTime and endTime.Symbol and interval is required.Limit must between 0 and 1000."}`))
 		return
 	}
 

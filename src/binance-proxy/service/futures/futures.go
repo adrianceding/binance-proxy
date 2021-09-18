@@ -51,13 +51,15 @@ func (s *Futures) start() {
 
 				data, err := s.getExchangeInfo()
 				if err != nil {
-					log.Printf("Get futures exchange info error!Error:%s", err)
+					log.Printf("Futures exchangeInfo init error!Error:%s", err)
 					continue
 				}
 
 				s.mutex.Lock()
 				s.rawExchangeInfo = data
 				s.mutex.Unlock()
+
+				log.Printf("Futures exchangeInfo update success!")
 
 				break
 			}
