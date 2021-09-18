@@ -2,47 +2,39 @@ package main
 
 import (
 	"binance-proxy/handler"
+	"binance-proxy/service"
+	"context"
 	"flag"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func startSpotProxy(address string) {
+func startProxy(ctx context.Context, address string, class service.Class) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler.NewSpotHandler())
+	mux.HandleFunc("/", handler.NewHandler(ctx, class))
 
-	log.Info("Start spot proxy !Address:", address)
+	log.Infof("Start %s proxy !Address: %s", class, address)
 	if err := http.ListenAndServe(address, mux); err != nil {
-		log.Fatal("Start spot proxy failed,err:", err)
+		log.Fatalf("Start %s proxy failed!Error: %s", class, err)
 	}
 }
 
-func startFuturesProxy(address string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler.NewFuturesHandler())
-
-	log.Info("Start futures proxy !Address:", address)
-	if err := http.ListenAndServe(address, mux); err != nil {
-		log.Fatal("Start futures proxy failed,err:", err)
-	}
-}
-
-func handleSignal(wg *sync.WaitGroup) {
+func handleSignal() {
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for s := range signalChan {
 		switch s {
 		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-			wg.Done()
+			cancel()
 		}
 	}
 }
 
+var ctx, cancel = context.WithCancel(context.Background())
 var flagSpotAddress string
 var flagFuturesAddress string
 var flagDebug bool
@@ -57,15 +49,12 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
+	go handleSignal()
 
-	go handleSignal(wg)
+	go startProxy(ctx, flagSpotAddress, service.SPOT)
+	go startProxy(ctx, flagFuturesAddress, service.FUTURES)
 
-	go startSpotProxy(flagSpotAddress)
-	go startFuturesProxy(flagFuturesAddress)
+	<-ctx.Done()
 
-	wg.Wait()
-
-	log.Info("\nUser interrupted..")
+	log.Info("User interrupted..")
 }
