@@ -54,7 +54,8 @@ func (s *SpotDepth) Start() {
 
 			delay = 1
 			select {
-			case stopC <- <-s.stopC:
+			case <-s.stopC:
+				stopC <- struct{}{}
 				return
 			case <-doneC:
 			case <-s.errorC:
