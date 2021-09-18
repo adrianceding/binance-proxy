@@ -1,14 +1,14 @@
 package futures
 
 import (
-	"log"
 	"sync"
 	"time"
 
 	client "github.com/adshao/go-binance/v2/futures"
+	log "github.com/sirupsen/logrus"
 )
 
-type FuturesDepth struct {
+type FuturesDepthSrv struct {
 	mutex sync.RWMutex
 
 	onceStart  sync.Once
@@ -24,8 +24,8 @@ type FuturesDepth struct {
 	updateTime time.Time
 }
 
-func NewFuturesDepth(si SymbolInterval) *FuturesDepth {
-	return &FuturesDepth{
+func NewFuturesDepthSrv(si SymbolInterval) *FuturesDepthSrv {
+	return &FuturesDepthSrv{
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
@@ -33,30 +33,19 @@ func NewFuturesDepth(si SymbolInterval) *FuturesDepth {
 	}
 }
 
-func (s *FuturesDepth) GetDepth() client.DepthResponse {
+func (s *FuturesDepthSrv) GetDepth() (*client.DepthResponse, time.Time) {
 	<-s.inited
 
-	defer s.mutex.RUnlock()
-	s.mutex.RLock()
-
-	var t client.DepthResponse
-	// if time.Now().Sub(s.updateTime).Seconds() > 5 {
-	// 	return t
-	// }
-	if s.depth != nil {
-		t = *s.depth
-	}
-
-	return t
+	return s.depth, s.updateTime
 }
 
-func (s *FuturesDepth) Stop() {
+func (s *FuturesDepthSrv) Stop() {
 	s.onceStop.Do(func() {
 		s.stopC <- struct{}{}
 	})
 }
 
-func (s *FuturesDepth) Start() {
+func (s *FuturesDepthSrv) Start() {
 	s.onceStart.Do(func() {
 		go func() {
 			for delay := 1; ; delay *= 2 {
@@ -69,10 +58,9 @@ func (s *FuturesDepth) Start() {
 				}
 				time.Sleep(time.Second * time.Duration(delay-1))
 
-				client.WebsocketKeepalive = true
 				doneC, stopC, err := client.WsPartialDepthServeWithRate(s.si.Symbol, 20, 100*time.Millisecond, s.wsHandler, s.errHandler)
 				if err != nil {
-					log.Printf("%s.Futures websocket depth connect error!Error:%s", s.si, err)
+					log.Errorf("%s.Futures websocket depth connect error!Error:%s", s.si, err)
 					continue
 				}
 
@@ -84,13 +72,14 @@ func (s *FuturesDepth) Start() {
 				case <-doneC:
 				case <-s.errorC:
 				}
-				log.Printf("%s.Futures websocket depth connect out!Reconnecting", s.si)
+
+				log.Debugf("%s.Futures websocket depth disconnected!Reconnecting", s.si)
 			}
 		}()
 	})
 }
 
-func (s *FuturesDepth) wsHandler(event *client.WsDepthEvent) {
+func (s *FuturesDepthSrv) wsHandler(event *client.WsDepthEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -102,12 +91,12 @@ func (s *FuturesDepth) wsHandler(event *client.WsDepthEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
-		log.Printf("%s.Futures depth init success!", s.si)
+		log.Debugf("%s.Futures depth init success!", s.si)
 		close(s.inited)
 	})
 }
 
-func (s *FuturesDepth) errHandler(err error) {
-	log.Printf("%s.Futures depth websocket throw error!Error:%s", s.si, err)
+func (s *FuturesDepthSrv) errHandler(err error) {
+	log.Errorf("%s.Futures depth websocket throw error!Error:%s", s.si, err)
 	s.errorC <- struct{}{}
 }

@@ -3,23 +3,24 @@ package handler
 import (
 	"binance-proxy/service/spot"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func NewSpotHandler() func(w http.ResponseWriter, r *http.Request) {
 	handler := &Spot{
-		srv: spot.NewSpot(),
+		srv: spot.NewSpotSrv(),
 	}
 	return handler.Router
 }
 
 type Spot struct {
-	srv *spot.Spot
+	srv *spot.SpotSrv
 }
 
 func (s *Spot) Router(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +35,7 @@ func (s *Spot) Router(w http.ResponseWriter, r *http.Request) {
 		s.exchangeInfo(w, r)
 
 	default:
-		log.Printf("Spot reverse proxy.Path:%s", r.URL.Path)
+		log.Debugf("Spot reverse proxy.Path:%s", r.URL.Path)
 		s.reverseProxy(w, r)
 	}
 }
@@ -78,7 +79,7 @@ func (s *Spot) klines(w http.ResponseWriter, r *http.Request) {
 		minLen = limitInt
 	}
 
-	klines := make([]interface{}, minLen)
+	klines := make([]interface{}, minLen, minLen+1)
 	for i := minLen; i > 0; i-- {
 		ri := len(data) - i
 		klines[minLen-i] = []interface{}{
@@ -95,6 +96,24 @@ func (s *Spot) klines(w http.ResponseWriter, r *http.Request) {
 			data[ri].TakerBuyQuoteAssetVolume,
 			"0",
 		}
+	}
+
+	if len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
+		klines = append(klines, []interface{}{
+			data[len(data)-1].CloseTime + 1,
+			data[len(data)-1].Close,
+			data[len(data)-1].Close,
+			data[len(data)-1].Close,
+			data[len(data)-1].Close,
+			"0.0",
+			data[len(data)-1].CloseTime + 1 + (data[len(data)-1].CloseTime - data[len(data)-1].OpenTime),
+			"0.0",
+			0,
+			"0.0",
+			"0.0",
+			"0",
+		})
+		klines = klines[len(klines)-minLen:]
 	}
 
 	w.Header().Set("Content-Type", "application/json")

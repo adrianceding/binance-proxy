@@ -2,20 +2,24 @@ package futures
 
 import (
 	"io/ioutil"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	client "github.com/adshao/go-binance/v2/futures"
+	log "github.com/sirupsen/logrus"
 )
+
+func init() {
+	// client.WebsocketKeepalive = true
+}
 
 type SymbolInterval struct {
 	Symbol   string
 	Interval string
 }
 
-type Futures struct {
+type FuturesSrv struct {
 	mutex sync.RWMutex
 
 	rawExchangeInfo []byte
@@ -24,13 +28,13 @@ type Futures struct {
 	depthSrv  sync.Map // map[SymbolInterval]*FuturesDepth
 }
 
-func NewFutures() *Futures {
-	s := &Futures{}
+func NewFuturesSrv() *FuturesSrv {
+	s := &FuturesSrv{}
 	s.start()
 	return s
 }
 
-func (s *Futures) getExchangeInfo() ([]byte, error) {
+func (s *FuturesSrv) getExchangeInfo() ([]byte, error) {
 	resp, err := http.Get("https://fapi.binance.com/fapi/v1/exchangeInfo")
 	if err != nil {
 		return nil, err
@@ -40,7 +44,7 @@ func (s *Futures) getExchangeInfo() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-func (s *Futures) start() {
+func (s *FuturesSrv) start() {
 	go func() {
 		for {
 			for delay := 1; ; delay *= 2 {
@@ -51,7 +55,7 @@ func (s *Futures) start() {
 
 				data, err := s.getExchangeInfo()
 				if err != nil {
-					log.Printf("Futures exchangeInfo init error!Error:%s", err)
+					log.Errorf("Futures exchangeInfo init error!Error:%s", err)
 					continue
 				}
 
@@ -59,7 +63,7 @@ func (s *Futures) start() {
 				s.rawExchangeInfo = data
 				s.mutex.Unlock()
 
-				log.Printf("Futures exchangeInfo update success!")
+				log.Debugf("Futures exchangeInfo update success!")
 
 				break
 			}
@@ -69,20 +73,22 @@ func (s *Futures) start() {
 	}()
 }
 
-func (s *Futures) ExchangeInfo() []byte {
+func (s *FuturesSrv) ExchangeInfo() []byte {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
-	return s.rawExchangeInfo
+	r := make([]byte, len(s.rawExchangeInfo))
+	copy(r, s.rawExchangeInfo)
+	return r
 }
 
-func (s *Futures) Klines(symbol, interval string) []client.Kline {
+func (s *FuturesSrv) Klines(symbol, interval string) []client.Kline {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: interval}
-	v, loaded := s.klinesSrv.LoadOrStore(si, NewFuturesKlines(si))
-	srv := v.(*FuturesKlines)
+	v, loaded := s.klinesSrv.LoadOrStore(si, NewFuturesKlinesSrv(si))
+	srv := v.(*FuturesKlinesSrv)
 	if loaded == false {
 		srv.Start()
 	}
@@ -90,13 +96,13 @@ func (s *Futures) Klines(symbol, interval string) []client.Kline {
 	return srv.GetKlines()
 }
 
-func (s *Futures) Depth(symbol string) client.DepthResponse {
+func (s *FuturesSrv) Depth(symbol string) client.DepthResponse {
 	defer s.mutex.RUnlock()
 	s.mutex.RLock()
 
 	si := SymbolInterval{Symbol: symbol, Interval: ""}
-	v, loaded := s.klinesSrv.LoadOrStore(si, NewFuturesDepth(si))
-	srv := v.(*FuturesDepth)
+	v, loaded := s.klinesSrv.LoadOrStore(si, NewFuturesDepthSrv(si))
+	srv := v.(*FuturesDepthSrv)
 	if loaded == false {
 		srv.Start()
 	}

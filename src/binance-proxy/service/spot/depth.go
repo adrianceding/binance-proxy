@@ -1,14 +1,15 @@
 package spot
 
 import (
-	"log"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	client "github.com/adshao/go-binance/v2"
 )
 
-type SpotDepth struct {
+type SpotDepthSrv struct {
 	mutex sync.RWMutex
 
 	onceStart  sync.Once
@@ -24,8 +25,8 @@ type SpotDepth struct {
 	updateTime time.Time
 }
 
-func NewSpotDepth(si SymbolInterval) *SpotDepth {
-	return &SpotDepth{
+func NewSpotDepthSrv(si SymbolInterval) *SpotDepthSrv {
+	return &SpotDepthSrv{
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
@@ -33,7 +34,7 @@ func NewSpotDepth(si SymbolInterval) *SpotDepth {
 	}
 }
 
-func (s *SpotDepth) Start() {
+func (s *SpotDepthSrv) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			s.mutex.Lock()
@@ -45,10 +46,9 @@ func (s *SpotDepth) Start() {
 			}
 			time.Sleep(time.Second * time.Duration(delay-1))
 
-			client.WebsocketKeepalive = true
 			doneC, stopC, err := client.WsPartialDepthServe100Ms(s.si.Symbol, "20", s.wsHandler, s.errHandler)
 			if err != nil {
-				log.Printf("%s.Spot websocket depth connect error!Error:%s", s.si, err)
+				log.Errorf("%s.Spot websocket depth connect error!Error:%s", s.si, err)
 				continue
 			}
 
@@ -60,18 +60,18 @@ func (s *SpotDepth) Start() {
 			case <-doneC:
 			case <-s.errorC:
 			}
-			log.Printf("%s.Spot websocket depth connect out!Reconnecting", s.si)
+			log.Debugf("%s.Spot websocket depth disconnected!Reconnecting", s.si)
 		}
 	}()
 }
 
-func (s *SpotDepth) Stop() {
+func (s *SpotDepthSrv) Stop() {
 	s.onceStop.Do(func() {
 		s.stopC <- struct{}{}
 	})
 }
 
-func (s *SpotDepth) wsHandler(event *client.WsPartialDepthEvent) {
+func (s *SpotDepthSrv) wsHandler(event *client.WsPartialDepthEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -83,29 +83,21 @@ func (s *SpotDepth) wsHandler(event *client.WsPartialDepthEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
-		log.Printf("%s.Spot depth init success!", s.si)
+		log.Debugf("%s.Spot depth init success!", s.si)
 		close(s.inited)
 	})
 }
 
-func (s *SpotDepth) errHandler(err error) {
-	log.Printf("%s.Spot depth websocket throw error!Error:%s", s.si, err)
+func (s *SpotDepthSrv) errHandler(err error) {
+	log.Errorf("%s.Spot depth websocket throw error!Error:%s", s.si, err)
 	s.errorC <- struct{}{}
 }
 
-func (s *SpotDepth) GetDepth() client.DepthResponse {
+func (s *SpotDepthSrv) GetDepth() (*client.DepthResponse, time.Time) {
 	<-s.inited
 
-	defer s.mutex.RUnlock()
-	s.mutex.RLock()
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
 
-	var t client.DepthResponse
-	// if time.Now().Sub(s.updateTime).Seconds() > 5 {
-	// 	return t
-	// }
-	if s.depth != nil {
-		t = *s.depth
-	}
-
-	return t
+	return s.depth, s.updateTime
 }

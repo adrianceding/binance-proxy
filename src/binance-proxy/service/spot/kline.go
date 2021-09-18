@@ -3,14 +3,15 @@ package spot
 import (
 	"container/list"
 	"context"
-	"log"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	client "github.com/adshao/go-binance/v2"
 )
 
-type SpotKlines struct {
+type SpotKlinesSrv struct {
 	mutex sync.RWMutex
 
 	onceStart  sync.Once
@@ -26,8 +27,8 @@ type SpotKlines struct {
 	updateTime time.Time
 }
 
-func NewSpotKlines(si SymbolInterval) *SpotKlines {
-	return &SpotKlines{
+func NewSpotKlinesSrv(si SymbolInterval) *SpotKlinesSrv {
+	return &SpotKlinesSrv{
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		inited: make(chan struct{}),
@@ -35,7 +36,7 @@ func NewSpotKlines(si SymbolInterval) *SpotKlines {
 	}
 }
 
-func (s *SpotKlines) Start() {
+func (s *SpotKlinesSrv) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			s.mutex.Lock()
@@ -47,10 +48,9 @@ func (s *SpotKlines) Start() {
 			}
 			time.Sleep(time.Second * time.Duration(delay-1))
 
-			client.WebsocketKeepalive = true
 			doneC, stopC, err := client.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandler, s.errHandler)
 			if err != nil {
-				log.Printf("%s.Spot websocket klines connect error!Error:%s", s.si, err)
+				log.Errorf("%s.Spot websocket klines connect error!Error:%s", s.si, err)
 				continue
 			}
 
@@ -62,18 +62,18 @@ func (s *SpotKlines) Start() {
 			case <-doneC:
 			case <-s.errorC:
 			}
-			log.Printf("%s.Spot websocket klines connect out!Reconnecting", s.si)
+			log.Debugf("%s.Spot websocket klines disconnected!Reconnecting", s.si)
 		}
 	}()
 }
 
-func (s *SpotKlines) Stop() {
+func (s *SpotKlinesSrv) Stop() {
 	s.onceStop.Do(func() {
 		s.stopC <- struct{}{}
 	})
 }
 
-func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
+func (s *SpotKlinesSrv) wsHandler(event *client.WsKlineEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -88,7 +88,7 @@ func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
 				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 				Do(context.Background())
 			if err != nil {
-				log.Printf("%s.Get initialization klines error!Error:%s", s.si, err)
+				log.Errorf("%s.Get initialization klines error!Error:%s", s.si, err)
 			}
 
 			s.klines = list.New()
@@ -126,17 +126,17 @@ func (s *SpotKlines) wsHandler(event *client.WsKlineEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
-		log.Printf("%s.Spot klines init success!", s.si)
+		log.Debugf("%s.Spot klines init success!", s.si)
 		close(s.inited)
 	})
 }
 
-func (s *SpotKlines) errHandler(err error) {
-	log.Printf("%s.Spot klines websocket throw error!Error:%s", s.si, err)
+func (s *SpotKlinesSrv) errHandler(err error) {
+	log.Errorf("%s.Spot klines websocket throw error!Error:%s", s.si, err)
 	s.errorC <- struct{}{}
 }
 
-func (s *SpotKlines) GetKlines() []client.Kline {
+func (s *SpotKlinesSrv) GetKlines() []client.Kline {
 	<-s.inited
 
 	defer s.mutex.RUnlock()

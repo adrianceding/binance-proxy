@@ -3,14 +3,15 @@ package futures
 import (
 	"container/list"
 	"context"
-	"log"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	client "github.com/adshao/go-binance/v2/futures"
 )
 
-type FuturesKlines struct {
+type FuturesKlinesSrv struct {
 	mutex sync.RWMutex
 
 	onceStart  sync.Once
@@ -26,8 +27,8 @@ type FuturesKlines struct {
 	updateTime time.Time
 }
 
-func NewFuturesKlines(si SymbolInterval) *FuturesKlines {
-	return &FuturesKlines{
+func NewFuturesKlinesSrv(si SymbolInterval) *FuturesKlinesSrv {
+	return &FuturesKlinesSrv{
 		si:     si,
 		stopC:  make(chan struct{}, 1),
 		errorC: make(chan struct{}, 1),
@@ -35,7 +36,7 @@ func NewFuturesKlines(si SymbolInterval) *FuturesKlines {
 	}
 }
 
-func (s *FuturesKlines) Start() {
+func (s *FuturesKlinesSrv) Start() {
 	go func() {
 		for delay := 1; ; delay *= 2 {
 			s.mutex.Lock()
@@ -47,35 +48,36 @@ func (s *FuturesKlines) Start() {
 			}
 			time.Sleep(time.Second * time.Duration(delay-1))
 
-			client.WebsocketKeepalive = true
-
 			doneC, stopC, err := client.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandler, s.errHandler)
 			if err != nil {
-				log.Printf("%s.Futures websocket klines connect error!Error:%s", s.si, err)
+				log.Errorf("%s.Futures websocket klines connect error!Error:%s", s.si, err)
 				continue
 			}
 
 			delay = 1
 			select {
 			case <-s.stopC:
+				log.Debugf("%s.Stop enter", s.si)
 				stopC <- struct{}{}
+				log.Debugf("%s.Stop leave", s.si)
 				return
 			case <-doneC:
+				log.Debugf("%s.DoneDoneDoneDoneDoneDoneDoneDoneDoneDoneDoneDoneDoneDone", s.si)
 			case <-s.errorC:
 			}
 
-			log.Printf("%s.Futures websocket klines connect out!Reconnecting", s.si)
+			log.Debugf("%s.Futures websocket klines disconnected!Reconnecting", s.si)
 		}
 	}()
 }
 
-func (s *FuturesKlines) Stop() {
+func (s *FuturesKlinesSrv) Stop() {
 	s.onceStop.Do(func() {
 		s.stopC <- struct{}{}
 	})
 }
 
-func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
+func (s *FuturesKlinesSrv) wsHandler(event *client.WsKlineEvent) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 
@@ -90,7 +92,7 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 				Do(context.Background())
 			if err != nil {
-				log.Printf("%s.Get initialization api klines error!Error:%s", s.si, err)
+				log.Errorf("%s.Get initialization api klines error!Error:%s", s.si, err)
 				continue
 			}
 
@@ -129,17 +131,17 @@ func (s *FuturesKlines) wsHandler(event *client.WsKlineEvent) {
 	s.updateTime = time.Now()
 
 	s.onceInited.Do(func() {
-		log.Printf("%s.Futures klines init success!", s.si)
+		log.Debugf("%s.Futures klines init success!", s.si)
 		close(s.inited)
 	})
 }
 
-func (s *FuturesKlines) errHandler(err error) {
-	log.Printf("%s.Futures klines websocket throw error!Error:%s", s.si, err)
+func (s *FuturesKlinesSrv) errHandler(err error) {
+	log.Errorf("%s.Futures klines websocket throw error!Error:%s", s.si, err)
 	s.errorC <- struct{}{}
 }
 
-func (s *FuturesKlines) GetKlines() []client.Kline {
+func (s *FuturesKlinesSrv) GetKlines() []client.Kline {
 	<-s.inited
 
 	defer s.mutex.RUnlock()
