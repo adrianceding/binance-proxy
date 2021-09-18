@@ -10,17 +10,17 @@ type DelayIterator struct {
 func NewDelayIterator() *DelayIterator {
 	return &DelayIterator{
 		delayList: []time.Duration{
-			0 * time.Microsecond,
-			10 * time.Microsecond,
-			10 * time.Microsecond,
-			10 * time.Microsecond,
-			1000 * time.Microsecond,
-			2000 * time.Microsecond,
-			5000 * time.Microsecond,
-			10000 * time.Microsecond,
-			15000 * time.Microsecond,
-			30000 * time.Microsecond,
-			60000 * time.Microsecond,
+			0 * time.Millisecond,
+			10 * time.Millisecond,
+			10 * time.Millisecond,
+			10 * time.Millisecond,
+			1000 * time.Millisecond,
+			2000 * time.Millisecond,
+			5000 * time.Millisecond,
+			10000 * time.Millisecond,
+			15000 * time.Millisecond,
+			30000 * time.Millisecond,
+			60000 * time.Millisecond,
 		},
 	}
 }
@@ -34,7 +34,7 @@ func (s *DelayIterator) Reset() {
 }
 
 func (s *DelayIterator) Delay() {
-	if s.index+1 > len(s.delayList) {
+	if s.index >= len(s.delayList) {
 		time.Sleep(s.delayList[len(s.delayList)])
 	} else {
 		time.Sleep(s.delayList[s.index])
