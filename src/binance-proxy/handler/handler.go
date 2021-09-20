@@ -36,12 +36,13 @@ func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
 		s.exchangeInfo(w, r)
 
 	default:
-		log.Debugf("%s reverse proxy.Path:%s", s.class, r.URL.Path)
 		s.reverseProxy(w, r)
 	}
 }
 
 func (s *Handler) reverseProxy(w http.ResponseWriter, r *http.Request) {
+	log.Debugf("%s reverse proxy.Path:%s", s.class, r.URL.RequestURI())
+
 	var u *url.URL
 	if s.class == service.SPOT {
 		r.Host = "api.binance.com"
