@@ -16,9 +16,7 @@ func (s *Handler) depth(w http.ResponseWriter, r *http.Request) {
 	limitInt, err := strconv.Atoi(limit)
 	switch {
 	case err != nil, symbol == "", limitInt < 5, limitInt > 20:
-		// Do not forward. So as not to affect normal requests
-		w.Write([]byte(`{"code": -1120,"msg": "Symbol is required.Limit must between 5 and 20."}`))
-
+		s.reverseProxy(w, r)
 		return
 	}
 

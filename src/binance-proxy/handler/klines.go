@@ -21,8 +21,7 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "",
 		symbol == "", interval == "":
 
-		// Do not forward. So as not to affect normal requests
-		w.Write([]byte(`{"code": -1103,"msg": "Not support startTime and endTime.Symbol and interval is required.Limit must between 0 and 1500."}`))
+		s.reverseProxy(w, r)
 		return
 	}
 
@@ -32,7 +31,7 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 		minLen = limitInt
 	}
 
-	klines := make([]interface{}, minLen, minLen+1)
+	klines := make([]interface{}, minLen)
 	for i := minLen; i > 0; i-- {
 		ri := len(data) - i
 		klines[minLen-i] = []interface{}{

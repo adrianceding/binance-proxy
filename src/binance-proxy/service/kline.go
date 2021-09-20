@@ -13,7 +13,23 @@ import (
 	futures "github.com/adshao/go-binance/v2/futures"
 )
 
-type Kline = futures.Kline
+type Kline struct {
+	OpenTime                 int64
+	Open                     string
+	High                     string
+	Low                      string
+	Close                    string
+	Volume                   string
+	CloseTime                int64
+	QuoteAssetVolume         string
+	TradeNum                 int64
+	TakerBuyBaseAssetVolume  string
+	TakerBuyQuoteAssetVolume string
+
+	IsFinal      bool
+	FirstTradeID int64
+	LastTradeID  int64
+}
 
 type KlinesSrv struct {
 	rw sync.RWMutex
@@ -26,7 +42,7 @@ type KlinesSrv struct {
 
 	si         symbolInterval
 	klinesList *list.List
-	klines     []Kline
+	klinesArr  []Kline
 	updateTime time.Time
 }
 
@@ -36,14 +52,6 @@ func NewKlinesSrv(ctx context.Context, si symbolInterval) *KlinesSrv {
 	s.initCtx, s.initDone = context.WithCancel(context.Background())
 
 	return s
-}
-
-func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
-	if s.si.Class == SPOT {
-		return spot.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandlerSpot, s.errHandler)
-	} else {
-		return futures.WsKlineServe(s.si.Symbol, s.si.Interval, s.wsHandlerFutures, s.errHandler)
-	}
 }
 
 func (s *KlinesSrv) Start() {
@@ -76,8 +84,21 @@ func (s *KlinesSrv) errHandler(err error) {
 	log.Errorf("%s.Klines websocket throw error!Error:%s", s.si, err)
 }
 
-func (s *KlinesSrv) wsHandlerSpot(event *spot.WsKlineEvent)       { s.wsHandler(event) }
-func (s *KlinesSrv) wsHandlerFutures(event *futures.WsKlineEvent) { s.wsHandler(event) }
+func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
+	if s.si.Class == SPOT {
+		return spot.WsKlineServe(s.si.Symbol,
+			s.si.Interval,
+			func(event *spot.WsKlineEvent) { s.wsHandler(event) },
+			s.errHandler,
+		)
+	} else {
+		return futures.WsKlineServe(s.si.Symbol,
+			s.si.Interval,
+			func(event *futures.WsKlineEvent) { s.wsHandler(event) },
+			s.errHandler,
+		)
+	}
+}
 
 func (s *KlinesSrv) wsHandler(event interface{}) {
 	if s.klinesList == nil {
@@ -100,9 +121,9 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 
 			s.klinesList = list.New()
 
-			if s.si.Class == SPOT {
-				for _, v := range klines.([]*spot.Kline) {
-					s.klinesList.PushBack(&Kline{
+			if vi, ok := klines.([]*spot.Kline); ok {
+				for k, v := range vi {
+					t := &Kline{
 						OpenTime:                 v.OpenTime,
 						Open:                     v.Open,
 						High:                     v.High,
@@ -114,11 +135,14 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 						TradeNum:                 v.TradeNum,
 						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
 						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-					})
+						IsFinal:                  k+1 < len(vi),
+					}
+
+					s.klinesList.PushBack(t)
 				}
-			} else {
-				for _, v := range klines.([]*futures.Kline) {
-					s.klinesList.PushBack(&Kline{
+			} else if vi, ok := klines.([]*futures.Kline); ok {
+				for k, v := range vi {
+					t := &Kline{
 						OpenTime:                 v.OpenTime,
 						Open:                     v.Open,
 						High:                     v.High,
@@ -130,7 +154,10 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 						TradeNum:                 v.TradeNum,
 						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
 						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-					})
+						IsFinal:                  k+1 < len(vi),
+					}
+
+					s.klinesList.PushBack(t)
 				}
 			}
 
@@ -142,35 +169,39 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 
 	// Merge kline
 	var kline *Kline
-	if s.si.Class == SPOT {
-		k := event.(*spot.WsKlineEvent).Kline
+	if vi, ok := event.(*spot.WsKlineEvent); ok {
 		kline = &Kline{
-			OpenTime:                 k.StartTime,
-			Open:                     k.Open,
-			High:                     k.High,
-			Low:                      k.Low,
-			Close:                    k.Close,
-			Volume:                   k.Volume,
-			CloseTime:                k.EndTime,
-			QuoteAssetVolume:         k.QuoteVolume,
-			TradeNum:                 k.TradeNum,
-			TakerBuyBaseAssetVolume:  k.ActiveBuyVolume,
-			TakerBuyQuoteAssetVolume: k.ActiveBuyQuoteVolume,
+			OpenTime:                 vi.Kline.StartTime,
+			Open:                     vi.Kline.Open,
+			High:                     vi.Kline.High,
+			Low:                      vi.Kline.Low,
+			Close:                    vi.Kline.Close,
+			Volume:                   vi.Kline.Volume,
+			CloseTime:                vi.Kline.EndTime,
+			QuoteAssetVolume:         vi.Kline.QuoteVolume,
+			TradeNum:                 vi.Kline.TradeNum,
+			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
+			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
+			IsFinal:                  vi.Kline.IsFinal,
+			FirstTradeID:             vi.Kline.FirstTradeID,
+			LastTradeID:              vi.Kline.LastTradeID,
 		}
-	} else {
-		k := event.(*futures.WsKlineEvent).Kline
+	} else if vi, ok := event.(*futures.WsKlineEvent); ok {
 		kline = &Kline{
-			OpenTime:                 k.StartTime,
-			Open:                     k.Open,
-			High:                     k.High,
-			Low:                      k.Low,
-			Close:                    k.Close,
-			Volume:                   k.Volume,
-			CloseTime:                k.EndTime,
-			QuoteAssetVolume:         k.QuoteVolume,
-			TradeNum:                 k.TradeNum,
-			TakerBuyBaseAssetVolume:  k.ActiveBuyVolume,
-			TakerBuyQuoteAssetVolume: k.ActiveBuyQuoteVolume,
+			OpenTime:                 vi.Kline.StartTime,
+			Open:                     vi.Kline.Open,
+			High:                     vi.Kline.High,
+			Low:                      vi.Kline.Low,
+			Close:                    vi.Kline.Close,
+			Volume:                   vi.Kline.Volume,
+			CloseTime:                vi.Kline.EndTime,
+			QuoteAssetVolume:         vi.Kline.QuoteVolume,
+			TradeNum:                 vi.Kline.TradeNum,
+			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
+			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
+			IsFinal:                  vi.Kline.IsFinal,
+			FirstTradeID:             vi.Kline.FirstTradeID,
+			LastTradeID:              vi.Kline.LastTradeID,
 		}
 	}
 
@@ -186,7 +217,7 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 
 	klinesArr := make([]Kline, s.klinesList.Len())
 	i := 0
-	for elems := s.klinesList.Front(); elems != nil; elems.Next() {
+	for elems := s.klinesList.Front(); elems != nil; elems = elems.Next() {
 		klinesArr[i] = *(elems.Value.(*Kline))
 		i++
 	}
@@ -194,7 +225,7 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
-	s.klines = klinesArr
+	s.klinesArr = klinesArr
 	s.updateTime = time.Now()
 }
 
@@ -203,5 +234,5 @@ func (s *KlinesSrv) GetKlines() []Kline {
 	s.rw.RLock()
 	defer s.rw.RUnlock()
 
-	return s.klines
+	return s.klinesArr
 }
