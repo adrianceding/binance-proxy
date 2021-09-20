@@ -106,10 +106,12 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			var klines interface{}
 			var err error
 			if s.si.Class == SPOT {
+				SpotLimiter.WaitN(context.Background(), 1)
 				klines, err = spot.NewClient("", "").NewKlinesService().
 					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 					Do(context.Background())
 			} else {
+				FuturesLimiter.WaitN(context.Background(), 5)
 				klines, err = futures.NewClient("", "").NewKlinesService().
 					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 					Do(context.Background())
