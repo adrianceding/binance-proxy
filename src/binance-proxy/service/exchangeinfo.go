@@ -44,17 +44,15 @@ func (s *ExchangeInfoSrv) Start() {
 	go func() {
 		rTimer := time.NewTimer(s.refreshDur)
 		for {
-			s.reTryRefreshExchangeInfo()
-
-			if !rTimer.Stop() {
-				<-rTimer.C
-			}
 			rTimer.Reset(s.refreshDur)
 			select {
 			case <-s.ctx.Done():
+				rTimer.Stop()
 				return
 			case <-rTimer.C:
 			}
+
+			s.reTryRefreshExchangeInfo()
 		}
 	}()
 }
