@@ -22,12 +22,11 @@ type ExchangeInfoSrv struct {
 	initDone context.CancelFunc
 
 	refreshDur   time.Duration
-	si           symbolInterval
+	si           *symbolInterval
 	exchangeInfo []byte
-	updateTime   time.Time
 }
 
-func NewExchangeInfoSrv(ctx context.Context, si symbolInterval) *ExchangeInfoSrv {
+func NewExchangeInfoSrv(ctx context.Context, si *symbolInterval) *ExchangeInfoSrv {
 	s := &ExchangeInfoSrv{
 		si:         si,
 		refreshDur: 60 * time.Second,
@@ -106,7 +105,6 @@ func (s *ExchangeInfoSrv) refreshExchangeInfo() error {
 	}
 
 	s.exchangeInfo = data
-	s.updateTime = time.Now()
 
 	log.Debugf("%s exchangeInfo refresh success!", s.si)
 

@@ -5,11 +5,11 @@ type symbolInterval struct {
 	Symbol   string
 	Interval string
 }
-type Class string
+type Class int8
 
-var FUTURES Class = "FUTURES"
-var SPOT Class = "SPOT"
+var SPOT Class = 0
+var FUTURES Class = 1
 
-func NewSymbolInterval(class Class, symbol, interval string) symbolInterval {
-	return symbolInterval{Class: class, Symbol: symbol, Interval: interval}
+func NewSymbolInterval(class Class, symbol, interval string) *symbolInterval {
+	return &symbolInterval{Class: class, Symbol: symbol, Interval: interval}
 }

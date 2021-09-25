@@ -5,7 +5,6 @@ import (
 	"container/list"
 	"context"
 	"sync"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -13,23 +12,38 @@ import (
 	futures "github.com/adshao/go-binance/v2/futures"
 )
 
-type Kline struct {
-	OpenTime                 int64
-	Open                     string
-	High                     string
-	Low                      string
-	Close                    string
-	Volume                   string
-	CloseTime                int64
-	QuoteAssetVolume         string
-	TradeNum                 int64
-	TakerBuyBaseAssetVolume  string
-	TakerBuyQuoteAssetVolume string
+const (
+	K_OpenTime = iota
+	K_Open
+	K_High
+	K_Low
+	K_Close
+	K_Volume
+	K_CloseTime
+	K_QuoteAssetVolume
+	K_TradeNum
+	K_TakerBuyBaseAssetVolume
+	K_TakerBuyQuoteAssetVolume
+	K_NoUse
+)
 
-	IsFinal      bool
-	FirstTradeID int64
-	LastTradeID  int64
-}
+// Save conversion
+type Kline [12]interface{}
+
+// {
+// OpenTime,
+// Open,
+// High,
+// Low,
+// Close,
+// Volume,
+// CloseTime,
+// QuoteAssetVolume,
+// TradeNum,
+// TakerBuyBaseAssetVolume,
+// TakerBuyQuoteAssetVolume,
+// "0",
+// }
 
 type KlinesSrv struct {
 	rw sync.RWMutex
@@ -40,13 +54,15 @@ type KlinesSrv struct {
 	initCtx  context.Context
 	initDone context.CancelFunc
 
-	si         symbolInterval
+	si         *symbolInterval
 	klinesList *list.List
-	klinesArr  []Kline
-	updateTime time.Time
+	klinesArr  []*Kline
+
+	FirstTradeID int64
+	LastTradeID  int64
 }
 
-func NewKlinesSrv(ctx context.Context, si symbolInterval) *KlinesSrv {
+func NewKlinesSrv(ctx context.Context, si *symbolInterval) *KlinesSrv {
 	s := &KlinesSrv{si: si}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.initCtx, s.initDone = context.WithCancel(context.Background())
@@ -124,39 +140,39 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			s.klinesList = list.New()
 
 			if vi, ok := klines.([]*spot.Kline); ok {
-				for k, v := range vi {
+				for _, v := range vi {
 					t := &Kline{
-						OpenTime:                 v.OpenTime,
-						Open:                     v.Open,
-						High:                     v.High,
-						Low:                      v.Low,
-						Close:                    v.Close,
-						Volume:                   v.Volume,
-						CloseTime:                v.CloseTime,
-						QuoteAssetVolume:         v.QuoteAssetVolume,
-						TradeNum:                 v.TradeNum,
-						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
-						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-						IsFinal:                  k+1 < len(vi),
+						K_OpenTime:                 v.OpenTime,
+						K_Open:                     v.Open,
+						K_High:                     v.High,
+						K_Low:                      v.Low,
+						K_Close:                    v.Close,
+						K_Volume:                   v.Volume,
+						K_CloseTime:                v.CloseTime,
+						K_QuoteAssetVolume:         v.QuoteAssetVolume,
+						K_TradeNum:                 v.TradeNum,
+						K_TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
+						K_TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
+						K_NoUse:                    "0",
 					}
 
 					s.klinesList.PushBack(t)
 				}
 			} else if vi, ok := klines.([]*futures.Kline); ok {
-				for k, v := range vi {
+				for _, v := range vi {
 					t := &Kline{
-						OpenTime:                 v.OpenTime,
-						Open:                     v.Open,
-						High:                     v.High,
-						Low:                      v.Low,
-						Close:                    v.Close,
-						Volume:                   v.Volume,
-						CloseTime:                v.CloseTime,
-						QuoteAssetVolume:         v.QuoteAssetVolume,
-						TradeNum:                 v.TradeNum,
-						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
-						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-						IsFinal:                  k+1 < len(vi),
+						K_OpenTime:                 v.OpenTime,
+						K_Open:                     v.Open,
+						K_High:                     v.High,
+						K_Low:                      v.Low,
+						K_Close:                    v.Close,
+						K_Volume:                   v.Volume,
+						K_CloseTime:                v.CloseTime,
+						K_QuoteAssetVolume:         v.QuoteAssetVolume,
+						K_TradeNum:                 v.TradeNum,
+						K_TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
+						K_TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
+						K_NoUse:                    "0",
 					}
 
 					s.klinesList.PushBack(t)
@@ -170,57 +186,57 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	}
 
 	// Merge kline
-	var kline *Kline
+	var k *Kline
 	if vi, ok := event.(*spot.WsKlineEvent); ok {
-		kline = &Kline{
-			OpenTime:                 vi.Kline.StartTime,
-			Open:                     vi.Kline.Open,
-			High:                     vi.Kline.High,
-			Low:                      vi.Kline.Low,
-			Close:                    vi.Kline.Close,
-			Volume:                   vi.Kline.Volume,
-			CloseTime:                vi.Kline.EndTime,
-			QuoteAssetVolume:         vi.Kline.QuoteVolume,
-			TradeNum:                 vi.Kline.TradeNum,
-			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
-			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
-			IsFinal:                  vi.Kline.IsFinal,
-			FirstTradeID:             vi.Kline.FirstTradeID,
-			LastTradeID:              vi.Kline.LastTradeID,
+		k = &Kline{
+			K_OpenTime:                 vi.Kline.StartTime,
+			K_Open:                     vi.Kline.Open,
+			K_High:                     vi.Kline.High,
+			K_Low:                      vi.Kline.Low,
+			K_Close:                    vi.Kline.Close,
+			K_Volume:                   vi.Kline.Volume,
+			K_CloseTime:                vi.Kline.EndTime,
+			K_QuoteAssetVolume:         vi.Kline.QuoteVolume,
+			K_TradeNum:                 vi.Kline.TradeNum,
+			K_TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
+			K_TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
+			K_NoUse:                    "0",
 		}
+		s.FirstTradeID = vi.Kline.FirstTradeID
+		s.LastTradeID = vi.Kline.LastTradeID
 	} else if vi, ok := event.(*futures.WsKlineEvent); ok {
-		kline = &Kline{
-			OpenTime:                 vi.Kline.StartTime,
-			Open:                     vi.Kline.Open,
-			High:                     vi.Kline.High,
-			Low:                      vi.Kline.Low,
-			Close:                    vi.Kline.Close,
-			Volume:                   vi.Kline.Volume,
-			CloseTime:                vi.Kline.EndTime,
-			QuoteAssetVolume:         vi.Kline.QuoteVolume,
-			TradeNum:                 vi.Kline.TradeNum,
-			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
-			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
-			IsFinal:                  vi.Kline.IsFinal,
-			FirstTradeID:             vi.Kline.FirstTradeID,
-			LastTradeID:              vi.Kline.LastTradeID,
+		k = &Kline{
+			K_OpenTime:                 vi.Kline.StartTime,
+			K_Open:                     vi.Kline.Open,
+			K_High:                     vi.Kline.High,
+			K_Low:                      vi.Kline.Low,
+			K_Close:                    vi.Kline.Close,
+			K_Volume:                   vi.Kline.Volume,
+			K_CloseTime:                vi.Kline.EndTime,
+			K_QuoteAssetVolume:         vi.Kline.QuoteVolume,
+			K_TradeNum:                 vi.Kline.TradeNum,
+			K_TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
+			K_TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
+			K_NoUse:                    "0",
 		}
+		s.FirstTradeID = vi.Kline.FirstTradeID
+		s.LastTradeID = vi.Kline.LastTradeID
 	}
 
-	if s.klinesList.Back().Value.(*Kline).OpenTime < kline.OpenTime {
-		s.klinesList.PushBack(kline)
-	} else if s.klinesList.Back().Value.(*Kline).OpenTime == kline.OpenTime {
-		s.klinesList.Back().Value = kline
+	if s.klinesList.Back().Value.(*Kline)[K_OpenTime].(int64) < k[K_OpenTime].(int64) {
+		s.klinesList.PushBack(k)
+	} else if s.klinesList.Back().Value.(*Kline)[K_OpenTime].(int64) == k[K_OpenTime].(int64) {
+		s.klinesList.Back().Value = k
 	}
 
 	for s.klinesList.Len() > 1000 {
 		s.klinesList.Remove(s.klinesList.Front())
 	}
 
-	klinesArr := make([]Kline, s.klinesList.Len())
+	klinesArr := make([]*Kline, s.klinesList.Len())
 	i := 0
 	for elems := s.klinesList.Front(); elems != nil; elems = elems.Next() {
-		klinesArr[i] = *(elems.Value.(*Kline))
+		klinesArr[i] = elems.Value.(*Kline)
 		i++
 	}
 
@@ -228,10 +244,9 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	defer s.rw.Unlock()
 
 	s.klinesArr = klinesArr
-	s.updateTime = time.Now()
 }
 
-func (s *KlinesSrv) GetKlines() []Kline {
+func (s *KlinesSrv) GetKlines() []*Kline {
 	<-s.initCtx.Done()
 	s.rw.RLock()
 	defer s.rw.RUnlock()

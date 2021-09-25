@@ -6,16 +6,13 @@ import (
 )
 
 type Service struct {
-	rw sync.RWMutex
-
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	class Class
-
+	class           Class
 	exchangeInfoSrv *ExchangeInfoSrv
-	klinesSrv       sync.Map // map[SymbolInterval]*Klines
-	depthSrv        sync.Map // map[SymbolInterval]*Depth
+	klinesSrv       sync.Map // map[symbolInterval]*Klines
+	depthSrv        sync.Map // map[symbolInterval]*Depth
 }
 
 func NewService(ctx context.Context, class Class) *Service {
@@ -31,9 +28,9 @@ func (s *Service) ExchangeInfo() []byte {
 	return s.exchangeInfoSrv.GetExchangeInfo()
 }
 
-func (s *Service) Klines(symbol, interval string) []Kline {
+func (s *Service) Klines(symbol, interval string) []*Kline {
 	si := NewSymbolInterval(s.class, symbol, interval)
-	srv, loaded := s.klinesSrv.LoadOrStore(si, NewKlinesSrv(s.ctx, si))
+	srv, loaded := s.klinesSrv.LoadOrStore(*si, NewKlinesSrv(s.ctx, si))
 	if loaded == false {
 		srv.(*KlinesSrv).Start()
 	}
@@ -43,7 +40,7 @@ func (s *Service) Klines(symbol, interval string) []Kline {
 
 func (s *Service) Depth(symbol string) *Depth {
 	si := NewSymbolInterval(s.class, symbol, "")
-	srv, loaded := s.klinesSrv.LoadOrStore(si, NewDepthSrv(s.ctx, si))
+	srv, loaded := s.klinesSrv.LoadOrStore(*si, NewDepthSrv(s.ctx, si))
 	if loaded == false {
 		srv.(*DepthSrv).Start()
 	}
