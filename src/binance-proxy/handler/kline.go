@@ -58,6 +58,8 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Data-Source", "websocket")
-	j, _ := json.Marshal(klines)
-	w.Write(j)
+
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	encoder.Encode(klines)
 }

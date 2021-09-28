@@ -79,10 +79,10 @@ func (s *ExchangeInfoSrv) refreshExchangeInfo() error {
 	var url string
 	if s.si.Class == SPOT {
 		url = "https://api.binance.com/api/v3/exchangeInfo"
-		SpotLimiter.WaitN(context.Background(), 1)
+		SpotLimiter.WaitN(s.ctx, 1)
 	} else {
 		url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
-		FuturesLimiter.WaitN(context.Background(), 5)
+		FuturesLimiter.WaitN(s.ctx, 5)
 	}
 
 	resp, err := http.Get(url)

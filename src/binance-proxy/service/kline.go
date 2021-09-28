@@ -122,15 +122,15 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			var klines interface{}
 			var err error
 			if s.si.Class == SPOT {
-				SpotLimiter.WaitN(context.Background(), 1)
+				SpotLimiter.WaitN(s.ctx, 1)
 				klines, err = spot.NewClient("", "").NewKlinesService().
 					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
-					Do(context.Background())
+					Do(s.ctx)
 			} else {
-				FuturesLimiter.WaitN(context.Background(), 5)
+				FuturesLimiter.WaitN(s.ctx, 5)
 				klines, err = futures.NewClient("", "").NewKlinesService().
 					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
-					Do(context.Background())
+					Do(s.ctx)
 			}
 			if err != nil {
 				log.Errorf("%s.Get init klines error!Error:%s", s.si, err)

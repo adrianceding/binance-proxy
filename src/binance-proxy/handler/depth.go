@@ -44,12 +44,14 @@ func (s *Handler) depth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Data-Source", "websocket")
-	j, _ := json.Marshal(map[string]interface{}{
+
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	encoder.Encode(map[string]interface{}{
 		"lastUpdateId": depth.LastUpdateID,
 		"E":            depth.Time,
 		"T":            depth.TradeTime,
 		"bids":         bids,
 		"asks":         asks,
 	})
-	w.Write(j)
 }
