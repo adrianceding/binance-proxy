@@ -11,6 +11,8 @@ import (
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
+
+	_ "net/http/pprof"
 )
 
 func startProxy(ctx context.Context, address string, class service.Class) {
@@ -48,6 +50,10 @@ func main() {
 	if flagDebug {
 		log.SetLevel(log.DebugLevel)
 	}
+
+	go func() {
+		http.ListenAndServe("0.0.0.0:8888", nil)
+	}()
 
 	go handleSignal()
 

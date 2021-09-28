@@ -2,13 +2,22 @@ package handler
 
 import (
 	"binance-proxy/service"
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"runtime"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
+
+var bufPool = &sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
 func NewHandler(ctx context.Context, class service.Class) func(w http.ResponseWriter, r *http.Request) {
 	handler := &Handler{
@@ -26,6 +35,9 @@ type Handler struct {
 
 func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
+	case "/tool/gc":
+		runtime.GC()
+
 	case "/api/v3/klines", "/fapi/v1/klines":
 		s.klines(w, r)
 

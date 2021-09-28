@@ -1,11 +1,9 @@
 package handler
 
 import (
-	"binance-proxy/service"
-	"encoding/json"
+	"bytes"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
@@ -26,40 +24,13 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawKlines := s.srv.Klines(symbol, interval)
-	minLen := len(rawKlines)
-	if minLen > limitInt {
-		minLen = limitInt
-	}
-
-	klines := rawKlines[len(rawKlines)-minLen:]
-	if len(rawKlines) > 0 && time.Now().UnixNano()/1e6 > rawKlines[len(rawKlines)-1][service.K_CloseTime].(int64) {
-		lastK := rawKlines[len(rawKlines)-1]
-		closeTime := lastK[service.K_CloseTime].(int64)
-		openTime := lastK[service.K_OpenTime].(int64)
-		close := lastK[service.K_Close].(string)
-
-		klines = append(klines, &service.Kline{
-			service.K_OpenTime:                 closeTime + 1,
-			service.K_Open:                     close,
-			service.K_High:                     close,
-			service.K_Low:                      close,
-			service.K_Close:                    close,
-			service.K_Volume:                   "0.0",
-			service.K_CloseTime:                closeTime + 1 + (closeTime - openTime),
-			service.K_QuoteAssetVolume:         "0.0",
-			service.K_TradeNum:                 0,
-			service.K_TakerBuyBaseAssetVolume:  "0.0",
-			service.K_TakerBuyQuoteAssetVolume: "0.0",
-			service.K_NoUse:                    "0",
-		})
-		klines = klines[len(klines)-minLen:]
-	}
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer pool.Put(buf)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Data-Source", "websocket")
 
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	encoder.Encode(klines)
+	s.srv.Klines(symbol, interval, true, limitInt, buf)
+	w.Write(buf.Bytes())
 }
