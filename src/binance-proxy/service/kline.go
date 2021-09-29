@@ -135,10 +135,6 @@ func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
 }
 
 func (s *KlinesSrv) initKlines() {
-	if s.klinesList != nil {
-		return
-	}
-
 	for d := tool.NewDelayIterator(); ; d.Delay() {
 		var klines interface{}
 		var err error
@@ -200,14 +196,15 @@ func (s *KlinesSrv) initKlines() {
 			}
 		}
 
-		defer s.initDone()
-
 		break
 	}
 }
 
 func (s *KlinesSrv) wsHandler(event interface{}) {
-	s.initKlines()
+	if s.klinesList == nil {
+		s.initKlines()
+		defer s.initDone()
+	}
 
 	// Merge kline
 	k := KlinePool.Get().(*Kline)
@@ -292,11 +289,13 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
-	go func(k *KlinesShare) {
-		k.rw.Lock()
-		defer k.rw.Unlock()
-		KlinesPool.Put(k)
-	}(s.klinesShare)
+	if s.klinesShare != nil {
+		go func(k *KlinesShare) {
+			k.rw.Lock()
+			defer k.rw.Unlock()
+			KlinesPool.Put(k)
+		}(s.klinesShare)
+	}
 
 	s.klinesShare = klinesShare
 }
