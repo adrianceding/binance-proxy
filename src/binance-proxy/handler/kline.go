@@ -26,11 +26,12 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer pool.Put(buf)
+	defer bufPool.Put(buf)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Data-Source", "websocket")
 
 	s.srv.Klines(symbol, interval, true, limitInt, buf)
+
 	w.Write(buf.Bytes())
 }

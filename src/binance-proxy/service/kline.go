@@ -12,6 +12,8 @@ import (
 	futures "github.com/adshao/go-binance/v2/futures"
 )
 
+const MAINTANCE_KLINES_LEN = 1000
+
 const (
 	K_OpenTime = iota
 	K_Open
@@ -28,24 +30,23 @@ const (
 )
 
 // Save conversion
-type Kline [12]interface{}
+type Kline [12]interface {
+	// OpenTime,
+	// Open,
+	// High,
+	// Low,
+	// Close,
+	// Volume,
+	// CloseTime,
+	// QuoteAssetVolume,
+	// TradeNum,
+	// TakerBuyBaseAssetVolume,
+	// TakerBuyQuoteAssetVolume,
+	// "0",
+}
 
-// {
-// OpenTime,
-// Open,
-// High,
-// Low,
-// Close,
-// Volume,
-// CloseTime,
-// QuoteAssetVolume,
-// TradeNum,
-// TakerBuyBaseAssetVolume,
-// TakerBuyQuoteAssetVolume,
-// "0",
-// }
-type Klines [1001]Kline
-type KlinesRW struct {
+type Klines []Kline
+type KlinesShare struct {
 	rw     sync.RWMutex
 	klines Klines
 }
@@ -56,9 +57,9 @@ var KlinePool = &sync.Pool{
 	},
 }
 
-var KlinesRWPool = &sync.Pool{
+var KlinesPool = &sync.Pool{
 	New: func() interface{} {
-		return &KlinesRW{Klines: Klines{}}
+		return &KlinesShare{klines: make(Klines, MAINTANCE_KLINES_LEN+1)}
 	},
 }
 
@@ -71,9 +72,9 @@ type KlinesSrv struct {
 	initCtx  context.Context
 	initDone context.CancelFunc
 
-	si         *symbolInterval
-	klinesList *list.List
-	klines     *Klines
+	si          *symbolInterval
+	klinesList  *list.List
+	klinesShare *KlinesShare
 
 	FirstTradeID int64
 	LastTradeID  int64
@@ -133,74 +134,80 @@ func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
 	}
 }
 
-func (s *KlinesSrv) wsHandler(event interface{}) {
-	if s.klinesList == nil {
-		for d := tool.NewDelayIterator(); ; d.Delay() {
-			var klines interface{}
-			var err error
-			if s.si.Class == SPOT {
-				SpotLimiter.WaitN(s.ctx, 1)
-				klines, err = spot.NewClient("", "").NewKlinesService().
-					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
-					Do(s.ctx)
-			} else {
-				FuturesLimiter.WaitN(s.ctx, 5)
-				klines, err = futures.NewClient("", "").NewKlinesService().
-					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
-					Do(s.ctx)
-			}
-			if err != nil {
-				log.Errorf("%s.Get init klines error!Error:%s", s.si, err)
-				continue
-			}
-
-			s.klinesList = list.New()
-
-			if vi, ok := klines.([]*spot.Kline); ok {
-				for _, v := range vi {
-					k := KlinePool.Get().(*Kline)
-
-					k[K_OpenTime] = v.OpenTime
-					k[K_Open] = v.Open
-					k[K_High] = v.High
-					k[K_Low] = v.Low
-					k[K_Close] = v.Close
-					k[K_Volume] = v.Volume
-					k[K_CloseTime] = v.CloseTime
-					k[K_QuoteAssetVolume] = v.QuoteAssetVolume
-					k[K_TradeNum] = v.TradeNum
-					k[K_TakerBuyBaseAssetVolume] = v.TakerBuyBaseAssetVolume
-					k[K_TakerBuyQuoteAssetVolume] = v.TakerBuyQuoteAssetVolume
-					k[K_NoUse] = "0"
-
-					s.klinesList.PushBack(k)
-				}
-			} else if vi, ok := klines.([]*futures.Kline); ok {
-				for _, v := range vi {
-					k := KlinePool.Get().(*Kline)
-
-					k[K_OpenTime] = v.OpenTime
-					k[K_Open] = v.Open
-					k[K_High] = v.High
-					k[K_Low] = v.Low
-					k[K_Close] = v.Close
-					k[K_Volume] = v.Volume
-					k[K_CloseTime] = v.CloseTime
-					k[K_QuoteAssetVolume] = v.QuoteAssetVolume
-					k[K_TradeNum] = v.TradeNum
-					k[K_TakerBuyBaseAssetVolume] = v.TakerBuyBaseAssetVolume
-					k[K_TakerBuyQuoteAssetVolume] = v.TakerBuyQuoteAssetVolume
-					k[K_NoUse] = "0"
-
-					s.klinesList.PushBack(k)
-				}
-			}
-
-			defer s.initDone()
-
-			break
-		}
+func (s *KlinesSrv) initKlines() {
+	if s.klinesList != nil {
+		return
 	}
+
+	for d := tool.NewDelayIterator(); ; d.Delay() {
+		var klines interface{}
+		var err error
+		if s.si.Class == SPOT {
+			SpotLimiter.WaitN(s.ctx, 1)
+			klines, err = spot.NewClient("", "").NewKlinesService().
+				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(MAINTANCE_KLINES_LEN).
+				Do(s.ctx)
+		} else {
+			FuturesLimiter.WaitN(s.ctx, 5)
+			klines, err = futures.NewClient("", "").NewKlinesService().
+				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(MAINTANCE_KLINES_LEN).
+				Do(s.ctx)
+		}
+		if err != nil {
+			log.Errorf("%s.Get init klines error!Error:%s", s.si, err)
+			continue
+		}
+
+		s.klinesList = list.New()
+
+		if vi, ok := klines.([]*spot.Kline); ok {
+			for _, v := range vi {
+				k := KlinePool.Get().(*Kline)
+
+				k[K_OpenTime] = v.OpenTime
+				k[K_Open] = v.Open
+				k[K_High] = v.High
+				k[K_Low] = v.Low
+				k[K_Close] = v.Close
+				k[K_Volume] = v.Volume
+				k[K_CloseTime] = v.CloseTime
+				k[K_QuoteAssetVolume] = v.QuoteAssetVolume
+				k[K_TradeNum] = v.TradeNum
+				k[K_TakerBuyBaseAssetVolume] = v.TakerBuyBaseAssetVolume
+				k[K_TakerBuyQuoteAssetVolume] = v.TakerBuyQuoteAssetVolume
+				k[K_NoUse] = "0"
+
+				s.klinesList.PushBack(k)
+			}
+		} else if vi, ok := klines.([]*futures.Kline); ok {
+			for _, v := range vi {
+				k := KlinePool.Get().(*Kline)
+
+				k[K_OpenTime] = v.OpenTime
+				k[K_Open] = v.Open
+				k[K_High] = v.High
+				k[K_Low] = v.Low
+				k[K_Close] = v.Close
+				k[K_Volume] = v.Volume
+				k[K_CloseTime] = v.CloseTime
+				k[K_QuoteAssetVolume] = v.QuoteAssetVolume
+				k[K_TradeNum] = v.TradeNum
+				k[K_TakerBuyBaseAssetVolume] = v.TakerBuyBaseAssetVolume
+				k[K_TakerBuyQuoteAssetVolume] = v.TakerBuyQuoteAssetVolume
+				k[K_NoUse] = "0"
+
+				s.klinesList.PushBack(k)
+			}
+		}
+
+		defer s.initDone()
+
+		break
+	}
+}
+
+func (s *KlinesSrv) wsHandler(event interface{}) {
+	s.initKlines()
 
 	// Merge kline
 	k := KlinePool.Get().(*Kline)
@@ -245,26 +252,51 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 		s.klinesList.Back().Value = k
 	}
 
-	for s.klinesList.Len() > 1000 {
+	for s.klinesList.Len() > MAINTANCE_KLINES_LEN {
 		KlinePool.Put(s.klinesList.Front().Value)
 		s.klinesList.Remove(s.klinesList.Front())
 	}
+
 	//------------------------------------------------------------------------
 
-	klinesRW := KlinesRWPool.Get().(*KlinesRW)
+	klinesShare := KlinesPool.Get().(*KlinesShare)
 
-	klinesRW.rw.Lock()
-	klinesRW.klines = klinesRW.klines[:s.klinesList.Len()]
+	klinesShare.klines = klinesShare.klines[:s.klinesList.Len()]
 	i := 0
 	for elems := s.klinesList.Front(); elems != nil; elems = elems.Next() {
-		klinesRW.klines[i] = *(elems.Value.(*Kline))
+		klinesShare.klines[i] = *(elems.Value.(*Kline))
 		i++
 	}
-	klinesRW.rw.Unlock()
+	// Add fake kline
+	lastK := klinesShare.klines[len(klinesShare.klines)-1]
+	closeTime := lastK[K_CloseTime].(int64)
+	openTime := lastK[K_OpenTime].(int64)
+
+	klinesShare.klines = append(klinesShare.klines, Kline{
+		K_OpenTime:                 closeTime + 1,
+		K_Open:                     lastK[K_Close],
+		K_High:                     lastK[K_Close],
+		K_Low:                      lastK[K_Close],
+		K_Close:                    lastK[K_Close],
+		K_Volume:                   "0.0",
+		K_CloseTime:                closeTime + 1 + (closeTime - openTime),
+		K_QuoteAssetVolume:         "0.0",
+		K_TradeNum:                 0,
+		K_TakerBuyBaseAssetVolume:  "0.0",
+		K_TakerBuyQuoteAssetVolume: "0.0",
+		K_NoUse:                    "0",
+	})
+
+	//------------------------------------------------------------------------
 
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
-	KlinesRWPool.Put(s.klines)
-	s.klines = klinesRW.klines
+	go func(k *KlinesShare) {
+		k.rw.Lock()
+		defer k.rw.Unlock()
+		KlinesPool.Put(k)
+	}(s.klinesShare)
+
+	s.klinesShare = klinesShare
 }
