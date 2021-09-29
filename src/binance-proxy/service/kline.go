@@ -51,6 +51,17 @@ type KlinesShare struct {
 	klines Klines
 }
 
+func (k *KlinesShare) delayDestrcut() {
+	go func() {
+		k.rw.Lock()
+		defer k.rw.Unlock()
+		for _, v := range k.klines {
+			KlinePool.Put(v)
+		}
+		KlinesPool.Put(k)
+	}()
+}
+
 var KlinePool = &sync.Pool{
 	New: func() interface{} {
 		return &Kline{}
@@ -257,35 +268,14 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	//------------------------------------------------------------------------
 
 	klinesShare := KlinesPool.Get().(*KlinesShare)
+	klinesShare.klines = klinesShare.klines[:s.klinesList.Len()+1]
 
-	klinesShare.klines = klinesShare.klines[:s.klinesList.Len()]
-	i := 0
-	for elems := s.klinesList.Front(); elems != nil; elems = elems.Next() {
+	for i, elems := 0, s.klinesList.Front(); elems != nil; elems, i = elems.Next(), i+1 {
 		klinesShare.klines[i] = KlinePool.Get().(*Kline)
 		*klinesShare.klines[i] = *(elems.Value.(*Kline))
-		i++
 	}
 
-	// Add fake kline
-	lastK := klinesShare.klines[len(klinesShare.klines)-1]
-	closeTime := lastK[K_CloseTime].(int64)
-	openTime := lastK[K_OpenTime].(int64)
-
-	fakeK := KlinePool.Get().(*Kline)
-	*fakeK = *lastK
-
-	fakeK[K_OpenTime] = closeTime + 1
-	fakeK[K_Open] = lastK[K_Close]
-	fakeK[K_High] = lastK[K_Close]
-	fakeK[K_Low] = lastK[K_Close]
-	fakeK[K_Volume] = "0.0"
-	fakeK[K_CloseTime] = closeTime + 1 + (closeTime - openTime)
-	fakeK[K_QuoteAssetVolume] = "0.0"
-	fakeK[K_TradeNum] = 0
-	fakeK[K_TakerBuyBaseAssetVolume] = "0.0"
-	fakeK[K_TakerBuyQuoteAssetVolume] = "0.0"
-
-	klinesShare.klines = append(klinesShare.klines, fakeK)
+	klinesShare.klines[len(klinesShare.klines)-1] = s.createFakeKline(klinesShare.klines[len(klinesShare.klines)-2])
 
 	//------------------------------------------------------------------------
 
@@ -293,15 +283,30 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	defer s.rw.Unlock()
 
 	if s.klinesShare != nil {
-		go func(k *KlinesShare) {
-			k.rw.Lock()
-			defer k.rw.Unlock()
-			for _, v := range k.klines {
-				KlinePool.Put(v)
-			}
-			KlinesPool.Put(k)
-		}(s.klinesShare)
+		s.klinesShare.delayDestrcut()
 	}
 
 	s.klinesShare = klinesShare
+}
+
+func (s *KlinesSrv) createFakeKline(lastKline *Kline) *Kline {
+	fakeKline := KlinePool.Get().(*Kline)
+
+	closeTime := lastKline[K_CloseTime].(int64)
+	openTime := lastKline[K_OpenTime].(int64)
+
+	fakeKline[K_OpenTime] = closeTime + 1
+	fakeKline[K_Open] = lastKline[K_Close]
+	fakeKline[K_High] = lastKline[K_Close]
+	fakeKline[K_Low] = lastKline[K_Close]
+	fakeKline[K_Close] = lastKline[K_Close]
+	fakeKline[K_Volume] = "0.0"
+	fakeKline[K_CloseTime] = closeTime + 1 + (closeTime - openTime)
+	fakeKline[K_QuoteAssetVolume] = "0.0"
+	fakeKline[K_TradeNum] = 0
+	fakeKline[K_TakerBuyBaseAssetVolume] = "0.0"
+	fakeKline[K_TakerBuyQuoteAssetVolume] = "0.0"
+	fakeKline[K_NoUse] = "0"
+
+	return fakeKline
 }

@@ -21,16 +21,35 @@ type DepthSrv struct {
 	initCtx  context.Context
 	initDone context.CancelFunc
 
-	si    *symbolInterval
-	depth *Depth
+	si         *symbolInterval
+	depthShare *depthShare
 }
 
-type Depth struct {
+type depthShare struct {
+	rw sync.RWMutex
+
 	LastUpdateID int64
 	Time         int64
 	TradeTime    int64
-	Bids         []futures.Bid
-	Asks         []futures.Ask
+	Bids         [][2]string
+	Asks         [][2]string
+}
+
+func (k *depthShare) delayDestrcut() {
+	go func() {
+		k.rw.Lock()
+		defer k.rw.Unlock()
+		depthSharePool.Put(k)
+	}()
+}
+
+var depthSharePool = &sync.Pool{
+	New: func() interface{} {
+		return &depthShare{
+			Bids: make([][2]string, 20),
+			Asks: make([][2]string, 20),
+		}
+	},
 }
 
 func NewDepthSrv(ctx context.Context, si *symbolInterval) *DepthSrv {
@@ -69,52 +88,69 @@ func (s *DepthSrv) Stop() {
 
 func (s *DepthSrv) connect() (doneC, stopC chan struct{}, err error) {
 	if s.si.Class == SPOT {
-		return spot.WsPartialDepthServe100Ms(s.si.Symbol, "20", s.wsHandler, s.errHandler)
+		return spot.WsPartialDepthServe100Ms(
+			s.si.Symbol, "20",
+			func(event *spot.WsPartialDepthEvent) { s.wsHandler(event) },
+			s.errHandler,
+		)
 	} else {
-		return futures.WsPartialDepthServeWithRate(s.si.Symbol, 20, 100*time.Millisecond, s.wsHandlerFutures, s.errHandler)
+		return futures.WsPartialDepthServeWithRate(
+			s.si.Symbol, 20, 100*time.Millisecond,
+			func(event *futures.WsDepthEvent) { s.wsHandler(event) },
+			s.errHandler,
+		)
 	}
 }
 
-func (s *DepthSrv) GetDepth() *Depth {
-	<-s.initCtx.Done()
-	s.rw.RLock()
-	defer s.rw.RUnlock()
-
-	return s.depth
-}
-
-func (s *DepthSrv) wsHandlerFutures(event *futures.WsDepthEvent) {
-	s.rw.Lock()
-	defer s.rw.Unlock()
-
-	if s.depth == nil {
+func (s *DepthSrv) wsHandler(event interface{}) {
+	if s.depthShare == nil {
 		defer s.initDone()
 	}
 
-	s.depth = &Depth{
-		LastUpdateID: event.LastUpdateID,
-		Time:         event.Time,
-		TradeTime:    event.TransactionTime,
-		Bids:         event.Bids,
-		Asks:         event.Asks,
-	}
-}
+	depthShare := depthSharePool.Get().(*depthShare)
 
-func (s *DepthSrv) wsHandler(event *spot.WsPartialDepthEvent) {
+	if vi, ok := event.(*spot.WsPartialDepthEvent); ok {
+		depthShare.LastUpdateID = vi.LastUpdateID
+		depthShare.Time = time.Now().UnixNano() / 1e6
+		depthShare.TradeTime = time.Now().UnixNano() / 1e6
+		minLen := len(vi.Bids)
+		if minLen > len(vi.Asks) {
+			minLen = len(vi.Asks)
+		}
+		depthShare.Asks = depthShare.Asks[:minLen]
+		depthShare.Bids = depthShare.Bids[:minLen]
+		for i := 0; i < minLen; i++ {
+			depthShare.Asks[i][0] = vi.Asks[i].Price
+			depthShare.Asks[i][1] = vi.Asks[i].Quantity
+			depthShare.Bids[i][0] = vi.Bids[i].Price
+			depthShare.Bids[i][1] = vi.Bids[i].Quantity
+		}
+	} else if vi, ok := event.(*futures.WsDepthEvent); ok {
+		depthShare.LastUpdateID = vi.LastUpdateID
+		depthShare.Time = vi.Time
+		depthShare.TradeTime = vi.TransactionTime
+		minLen := len(vi.Bids)
+		if minLen > len(vi.Asks) {
+			minLen = len(vi.Asks)
+		}
+		depthShare.Asks = depthShare.Asks[:minLen]
+		depthShare.Bids = depthShare.Bids[:minLen]
+		for i := 0; i < minLen; i++ {
+			depthShare.Asks[i][0] = vi.Asks[i].Price
+			depthShare.Asks[i][1] = vi.Asks[i].Quantity
+			depthShare.Bids[i][0] = vi.Bids[i].Price
+			depthShare.Bids[i][1] = vi.Bids[i].Quantity
+		}
+	}
+
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
-	if s.depth == nil {
-		defer s.initDone()
+	if s.depthShare != nil {
+		s.depthShare.delayDestrcut()
 	}
 
-	s.depth = &Depth{
-		LastUpdateID: event.LastUpdateID,
-		Time:         time.Now().UnixNano() / 1e6,
-		TradeTime:    time.Now().UnixNano() / 1e6,
-		Bids:         event.Bids,
-		Asks:         event.Asks,
-	}
+	s.depthShare = depthShare
 }
 
 func (s *DepthSrv) errHandler(err error) {
