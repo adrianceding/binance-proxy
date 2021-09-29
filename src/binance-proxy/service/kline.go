@@ -45,7 +45,7 @@ type Kline [12]interface {
 	// "0",
 }
 
-type Klines []Kline
+type Klines []*Kline
 type KlinesShare struct {
 	rw     sync.RWMutex
 	klines Klines
@@ -245,8 +245,8 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	if s.klinesList.Back().Value.(*Kline)[K_OpenTime].(int64) < k[K_OpenTime].(int64) {
 		s.klinesList.PushBack(k)
 	} else if s.klinesList.Back().Value.(*Kline)[K_OpenTime].(int64) == k[K_OpenTime].(int64) {
-		KlinePool.Put(s.klinesList.Back().Value)
-		s.klinesList.Back().Value = k
+		*(s.klinesList.Back().Value.(*Kline)) = *k
+		KlinePool.Put(k)
 	}
 
 	for s.klinesList.Len() > MAINTANCE_KLINES_LEN {
@@ -261,28 +261,31 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	klinesShare.klines = klinesShare.klines[:s.klinesList.Len()]
 	i := 0
 	for elems := s.klinesList.Front(); elems != nil; elems = elems.Next() {
-		klinesShare.klines[i] = *(elems.Value.(*Kline))
+		klinesShare.klines[i] = KlinePool.Get().(*Kline)
+		*klinesShare.klines[i] = *(elems.Value.(*Kline))
 		i++
 	}
+
 	// Add fake kline
 	lastK := klinesShare.klines[len(klinesShare.klines)-1]
 	closeTime := lastK[K_CloseTime].(int64)
 	openTime := lastK[K_OpenTime].(int64)
 
-	klinesShare.klines = append(klinesShare.klines, Kline{
-		K_OpenTime:                 closeTime + 1,
-		K_Open:                     lastK[K_Close],
-		K_High:                     lastK[K_Close],
-		K_Low:                      lastK[K_Close],
-		K_Close:                    lastK[K_Close],
-		K_Volume:                   "0.0",
-		K_CloseTime:                closeTime + 1 + (closeTime - openTime),
-		K_QuoteAssetVolume:         "0.0",
-		K_TradeNum:                 0,
-		K_TakerBuyBaseAssetVolume:  "0.0",
-		K_TakerBuyQuoteAssetVolume: "0.0",
-		K_NoUse:                    "0",
-	})
+	fakeK := KlinePool.Get().(*Kline)
+	*fakeK = *lastK
+
+	fakeK[K_OpenTime] = closeTime + 1
+	fakeK[K_Open] = lastK[K_Close]
+	fakeK[K_High] = lastK[K_Close]
+	fakeK[K_Low] = lastK[K_Close]
+	fakeK[K_Volume] = "0.0"
+	fakeK[K_CloseTime] = closeTime + 1 + (closeTime - openTime)
+	fakeK[K_QuoteAssetVolume] = "0.0"
+	fakeK[K_TradeNum] = 0
+	fakeK[K_TakerBuyBaseAssetVolume] = "0.0"
+	fakeK[K_TakerBuyQuoteAssetVolume] = "0.0"
+
+	klinesShare.klines = append(klinesShare.klines, fakeK)
 
 	//------------------------------------------------------------------------
 
@@ -293,6 +296,9 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 		go func(k *KlinesShare) {
 			k.rw.Lock()
 			defer k.rw.Unlock()
+			for _, v := range k.klines {
+				KlinePool.Put(v)
+			}
 			KlinesPool.Put(k)
 		}(s.klinesShare)
 	}
