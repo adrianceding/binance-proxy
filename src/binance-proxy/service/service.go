@@ -1,21 +1,21 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"sync"
-	"time"
 )
 
 type Service struct {
+	rw sync.RWMutex
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	class           Class
+	class Class
+
 	exchangeInfoSrv *ExchangeInfoSrv
-	klinesSrv       sync.Map // map[symbolInterval]*Klines
-	depthSrv        sync.Map // map[symbolInterval]*Depth
+	klinesSrv       sync.Map // map[SymbolInterval]*Klines
+	depthSrv        sync.Map // map[SymbolInterval]*Depth
 }
 
 func NewService(ctx context.Context, class Class) *Service {
@@ -31,90 +31,22 @@ func (s *Service) ExchangeInfo() []byte {
 	return s.exchangeInfoSrv.GetExchangeInfo()
 }
 
-func (s *Service) Klines(symbol, interval string, enableFakeKlines bool, limit int, buf *bytes.Buffer) {
+func (s *Service) Klines(symbol, interval string) []Kline {
 	si := NewSymbolInterval(s.class, symbol, interval)
-	v, loaded := s.klinesSrv.LoadOrStore(*si, NewKlinesSrv(s.ctx, si))
-	srv := v.(*KlinesSrv)
+	srv, loaded := s.klinesSrv.LoadOrStore(si, NewKlinesSrv(s.ctx, si))
 	if loaded == false {
-		srv.Start()
-	}
-	<-srv.initCtx.Done()
-
-	srv.rw.RLock()
-	klinesShare := srv.klinesShare
-	klinesShare.rw.RLock()
-	srv.rw.RUnlock()
-	defer klinesShare.rw.RUnlock()
-
-	startIndex := 0
-	endIndex := len(klinesShare.klines) - 1
-	if enableFakeKlines && time.Now().UnixNano()/1e6 > klinesShare.klines[endIndex][K_CloseTime].(int64) {
-		endIndex++
+		srv.(*KlinesSrv).Start()
 	}
 
-	if endIndex > limit {
-		startIndex = endIndex - limit
-	}
-
-	encoder := json.NewEncoder(buf)
-	encoder.SetEscapeHTML(false)
-	encoder.Encode(klinesShare.klines[startIndex:endIndex])
-
-	return
+	return srv.(*KlinesSrv).GetKlines()
 }
 
-type resDepth struct {
-	LastUpdateID int64       `json:"lastUpdateId"`
-	Time         int64       `json:"E"`
-	TradeTime    int64       `json:"T"`
-	Bids         [][2]string `json:"bids"`
-	Asks         [][2]string `json:"asks"`
-}
-
-var resDepthPool = &sync.Pool{
-	New: func() interface{} {
-		return &resDepth{
-			Bids: make([][2]string, 20),
-			Asks: make([][2]string, 20),
-		}
-	},
-}
-
-func (s *Service) Depth(symbol string, limit int, buf *bytes.Buffer) {
+func (s *Service) Depth(symbol string) *Depth {
 	si := NewSymbolInterval(s.class, symbol, "")
-	v, loaded := s.depthSrv.LoadOrStore(*si, NewDepthSrv(s.ctx, si))
-	srv := v.(*DepthSrv)
+	srv, loaded := s.klinesSrv.LoadOrStore(si, NewDepthSrv(s.ctx, si))
 	if loaded == false {
-		srv.Start()
-	}
-	<-srv.initCtx.Done()
-
-	srv.rw.RLock()
-	depthShare := srv.depthShare
-	depthShare.rw.RLock()
-	srv.rw.RUnlock()
-	defer depthShare.rw.RUnlock()
-
-	minLen := len(depthShare.Bids)
-	if minLen > len(depthShare.Asks) {
-		minLen = len(depthShare.Asks)
-	}
-	if minLen > limit {
-		minLen = limit
+		srv.(*DepthSrv).Start()
 	}
 
-	resDepth := resDepthPool.Get().(*resDepth)
-	defer resDepthPool.Put(resDepth)
-
-	resDepth.LastUpdateID = depthShare.LastUpdateID
-	resDepth.Time = depthShare.Time
-	resDepth.TradeTime = depthShare.TradeTime
-	resDepth.Asks = depthShare.Asks[:minLen]
-	resDepth.Bids = depthShare.Bids[:minLen]
-
-	encoder := json.NewEncoder(buf)
-	encoder.SetEscapeHTML(false)
-	encoder.Encode(resDepth)
-
-	return
+	return srv.(*DepthSrv).GetDepth()
 }
