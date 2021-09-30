@@ -12,38 +12,19 @@ import (
 	futures "github.com/adshao/go-binance/v2/futures"
 )
 
-const (
-	K_OpenTime = iota
-	K_Open
-	K_High
-	K_Low
-	K_Close
-	K_Volume
-	K_CloseTime
-	K_QuoteAssetVolume
-	K_TradeNum
-	K_TakerBuyBaseAssetVolume
-	K_TakerBuyQuoteAssetVolume
-	K_NoUse
-)
-
-// Save conversion
-type Kline [12]interface{}
-
-// {
-// OpenTime,
-// Open,
-// High,
-// Low,
-// Close,
-// Volume,
-// CloseTime,
-// QuoteAssetVolume,
-// TradeNum,
-// TakerBuyBaseAssetVolume,
-// TakerBuyQuoteAssetVolume,
-// "0",
-// }
+type Kline struct {
+	OpenTime                 int64
+	Open                     string
+	High                     string
+	Low                      string
+	Close                    string
+	Volume                   string
+	CloseTime                int64
+	QuoteAssetVolume         string
+	TradeNum                 int64
+	TakerBuyBaseAssetVolume  string
+	TakerBuyQuoteAssetVolume string
+}
 
 type KlinesSrv struct {
 	rw sync.RWMutex
@@ -142,18 +123,17 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			if vi, ok := klines.([]*spot.Kline); ok {
 				for _, v := range vi {
 					t := &Kline{
-						K_OpenTime:                 v.OpenTime,
-						K_Open:                     v.Open,
-						K_High:                     v.High,
-						K_Low:                      v.Low,
-						K_Close:                    v.Close,
-						K_Volume:                   v.Volume,
-						K_CloseTime:                v.CloseTime,
-						K_QuoteAssetVolume:         v.QuoteAssetVolume,
-						K_TradeNum:                 v.TradeNum,
-						K_TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
-						K_TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-						K_NoUse:                    "0",
+						OpenTime:                 v.OpenTime,
+						Open:                     v.Open,
+						High:                     v.High,
+						Low:                      v.Low,
+						Close:                    v.Close,
+						Volume:                   v.Volume,
+						CloseTime:                v.CloseTime,
+						QuoteAssetVolume:         v.QuoteAssetVolume,
+						TradeNum:                 v.TradeNum,
+						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
+						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
 					}
 
 					s.klinesList.PushBack(t)
@@ -161,18 +141,17 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			} else if vi, ok := klines.([]*futures.Kline); ok {
 				for _, v := range vi {
 					t := &Kline{
-						K_OpenTime:                 v.OpenTime,
-						K_Open:                     v.Open,
-						K_High:                     v.High,
-						K_Low:                      v.Low,
-						K_Close:                    v.Close,
-						K_Volume:                   v.Volume,
-						K_CloseTime:                v.CloseTime,
-						K_QuoteAssetVolume:         v.QuoteAssetVolume,
-						K_TradeNum:                 v.TradeNum,
-						K_TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
-						K_TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-						K_NoUse:                    "0",
+						OpenTime:                 v.OpenTime,
+						Open:                     v.Open,
+						High:                     v.High,
+						Low:                      v.Low,
+						Close:                    v.Close,
+						Volume:                   v.Volume,
+						CloseTime:                v.CloseTime,
+						QuoteAssetVolume:         v.QuoteAssetVolume,
+						TradeNum:                 v.TradeNum,
+						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
+						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
 					}
 
 					s.klinesList.PushBack(t)
@@ -189,43 +168,41 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 	var k *Kline
 	if vi, ok := event.(*spot.WsKlineEvent); ok {
 		k = &Kline{
-			K_OpenTime:                 vi.Kline.StartTime,
-			K_Open:                     vi.Kline.Open,
-			K_High:                     vi.Kline.High,
-			K_Low:                      vi.Kline.Low,
-			K_Close:                    vi.Kline.Close,
-			K_Volume:                   vi.Kline.Volume,
-			K_CloseTime:                vi.Kline.EndTime,
-			K_QuoteAssetVolume:         vi.Kline.QuoteVolume,
-			K_TradeNum:                 vi.Kline.TradeNum,
-			K_TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
-			K_TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
-			K_NoUse:                    "0",
+			OpenTime:                 vi.Kline.StartTime,
+			Open:                     vi.Kline.Open,
+			High:                     vi.Kline.High,
+			Low:                      vi.Kline.Low,
+			Close:                    vi.Kline.Close,
+			Volume:                   vi.Kline.Volume,
+			CloseTime:                vi.Kline.EndTime,
+			QuoteAssetVolume:         vi.Kline.QuoteVolume,
+			TradeNum:                 vi.Kline.TradeNum,
+			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
+			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
 		}
 		s.FirstTradeID = vi.Kline.FirstTradeID
 		s.LastTradeID = vi.Kline.LastTradeID
 	} else if vi, ok := event.(*futures.WsKlineEvent); ok {
 		k = &Kline{
-			K_OpenTime:                 vi.Kline.StartTime,
-			K_Open:                     vi.Kline.Open,
-			K_High:                     vi.Kline.High,
-			K_Low:                      vi.Kline.Low,
-			K_Close:                    vi.Kline.Close,
-			K_Volume:                   vi.Kline.Volume,
-			K_CloseTime:                vi.Kline.EndTime,
-			K_QuoteAssetVolume:         vi.Kline.QuoteVolume,
-			K_TradeNum:                 vi.Kline.TradeNum,
-			K_TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
-			K_TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
-			K_NoUse:                    "0",
+			OpenTime:                 vi.Kline.StartTime,
+			Open:                     vi.Kline.Open,
+			High:                     vi.Kline.High,
+			Low:                      vi.Kline.Low,
+			Close:                    vi.Kline.Close,
+			Volume:                   vi.Kline.Volume,
+			CloseTime:                vi.Kline.EndTime,
+			QuoteAssetVolume:         vi.Kline.QuoteVolume,
+			TradeNum:                 vi.Kline.TradeNum,
+			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
+			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
 		}
 		s.FirstTradeID = vi.Kline.FirstTradeID
 		s.LastTradeID = vi.Kline.LastTradeID
 	}
 
-	if s.klinesList.Back().Value.(*Kline)[K_OpenTime].(int64) < k[K_OpenTime].(int64) {
+	if s.klinesList.Back().Value.(*Kline).OpenTime < k.OpenTime {
 		s.klinesList.PushBack(k)
-	} else if s.klinesList.Back().Value.(*Kline)[K_OpenTime].(int64) == k[K_OpenTime].(int64) {
+	} else if s.klinesList.Back().Value.(*Kline).OpenTime == k.OpenTime {
 		s.klinesList.Back().Value = k
 	}
 
