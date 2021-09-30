@@ -21,9 +21,8 @@ type DepthSrv struct {
 	initCtx  context.Context
 	initDone context.CancelFunc
 
-	si         symbolInterval
-	depth      *Depth
-	updateTime time.Time
+	si    *symbolInterval
+	depth *Depth
 }
 
 type Depth struct {
@@ -34,7 +33,7 @@ type Depth struct {
 	Asks         []futures.Ask
 }
 
-func NewDepthSrv(ctx context.Context, si symbolInterval) *DepthSrv {
+func NewDepthSrv(ctx context.Context, si *symbolInterval) *DepthSrv {
 	s := &DepthSrv{si: si}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.initCtx, s.initDone = context.WithCancel(context.Background())
@@ -99,7 +98,6 @@ func (s *DepthSrv) wsHandlerFutures(event *futures.WsDepthEvent) {
 		Bids:         event.Bids,
 		Asks:         event.Asks,
 	}
-	s.updateTime = time.Now()
 }
 
 func (s *DepthSrv) wsHandler(event *spot.WsPartialDepthEvent) {
@@ -117,7 +115,6 @@ func (s *DepthSrv) wsHandler(event *spot.WsPartialDepthEvent) {
 		Bids:         event.Bids,
 		Asks:         event.Asks,
 	}
-	s.updateTime = time.Now()
 }
 
 func (s *DepthSrv) errHandler(err error) {
