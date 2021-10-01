@@ -44,6 +44,10 @@ func NewDepthSrv(ctx context.Context, si *symbolInterval) *DepthSrv {
 func (s *DepthSrv) Start() {
 	go func() {
 		for d := tool.NewDelayIterator(); ; d.Delay() {
+			s.rw.Lock()
+			s.depth = nil
+			s.rw.Unlock()
+
 			doneC, stopC, err := s.connect()
 			if err != nil {
 				log.Errorf("%s.Websocket depth connect error!Error:%s", s.si, err)

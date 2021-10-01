@@ -54,6 +54,10 @@ func NewKlinesSrv(ctx context.Context, si *symbolInterval) *KlinesSrv {
 func (s *KlinesSrv) Start() {
 	go func() {
 		for d := tool.NewDelayIterator(); ; d.Delay() {
+			s.rw.Lock()
+			s.klinesList = nil
+			s.rw.Unlock()
+
 			doneC, stopC, err := s.connect()
 			if err != nil {
 				log.Errorf("%s.Websocket klines connect error!Error:%s", s.si, err)
