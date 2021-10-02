@@ -38,9 +38,6 @@ type KlinesSrv struct {
 	si         *symbolInterval
 	klinesList *list.List
 	klinesArr  []*Kline
-
-	FirstTradeID int64
-	LastTradeID  int64
 }
 
 func NewKlinesSrv(ctx context.Context, si *symbolInterval) *KlinesSrv {
@@ -184,8 +181,6 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
 			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
 		}
-		s.FirstTradeID = vi.Kline.FirstTradeID
-		s.LastTradeID = vi.Kline.LastTradeID
 	} else if vi, ok := event.(*futures.WsKlineEvent); ok {
 		k = &Kline{
 			OpenTime:                 vi.Kline.StartTime,
@@ -200,8 +195,6 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			TakerBuyBaseAssetVolume:  vi.Kline.ActiveBuyVolume,
 			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
 		}
-		s.FirstTradeID = vi.Kline.FirstTradeID
-		s.LastTradeID = vi.Kline.LastTradeID
 	}
 
 	if s.klinesList.Back().Value.(*Kline).OpenTime < k.OpenTime {

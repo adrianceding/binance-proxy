@@ -26,6 +26,11 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := s.srv.Klines(symbol, interval)
+	if data == nil {
+		s.reverseProxy(w, r)
+		return
+	}
+
 	minLen := len(data)
 	if minLen > limitInt {
 		minLen = limitInt

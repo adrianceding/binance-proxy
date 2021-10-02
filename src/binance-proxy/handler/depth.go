@@ -21,6 +21,11 @@ func (s *Handler) depth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	depth := s.srv.Depth(symbol)
+	if depth == nil {
+		s.reverseProxy(w, r)
+		return
+	}
+
 	minLen := len(depth.Bids)
 	if minLen > len(depth.Asks) {
 		minLen = len(depth.Asks)

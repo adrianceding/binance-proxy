@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "net/http/pprof"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -48,6 +50,10 @@ func main() {
 	if flagDebug {
 		log.SetLevel(log.DebugLevel)
 	}
+
+	go func() {
+		http.ListenAndServe("0.0.0.0:8888", nil)
+	}()
 
 	go handleSignal()
 
