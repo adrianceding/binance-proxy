@@ -55,7 +55,7 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
+	if s.enableFakeKline && len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
 		klines = append(klines, []interface{}{
 			data[len(data)-1].CloseTime + 1,
 			data[len(data)-1].Close,
