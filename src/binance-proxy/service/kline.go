@@ -98,71 +98,75 @@ func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
 	}
 }
 
+func (s *KlinesSrv) initKlineData() {
+	var klines interface{}
+	var err error
+	for d := tool.NewDelayIterator(); ; d.Delay() {
+		if s.si.Class == SPOT {
+			SpotLimiter.WaitN(s.ctx, 1)
+			klines, err = spot.NewClient("", "").NewKlinesService().
+				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
+				Do(s.ctx)
+		} else {
+			FuturesLimiter.WaitN(s.ctx, 5)
+			klines, err = futures.NewClient("", "").NewKlinesService().
+				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
+				Do(s.ctx)
+		}
+		if err != nil {
+			log.Errorf("%s.Get init klines error!Error:%s", s.si, err)
+			continue
+		}
+
+		s.klinesList = list.New()
+
+		if vi, ok := klines.([]*spot.Kline); ok {
+			for _, v := range vi {
+				t := &Kline{
+					OpenTime:                 v.OpenTime,
+					Open:                     v.Open,
+					High:                     v.High,
+					Low:                      v.Low,
+					Close:                    v.Close,
+					Volume:                   v.Volume,
+					CloseTime:                v.CloseTime,
+					QuoteAssetVolume:         v.QuoteAssetVolume,
+					TradeNum:                 v.TradeNum,
+					TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
+					TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
+				}
+
+				s.klinesList.PushBack(t)
+			}
+		} else if vi, ok := klines.([]*futures.Kline); ok {
+			for _, v := range vi {
+				t := &Kline{
+					OpenTime:                 v.OpenTime,
+					Open:                     v.Open,
+					High:                     v.High,
+					Low:                      v.Low,
+					Close:                    v.Close,
+					Volume:                   v.Volume,
+					CloseTime:                v.CloseTime,
+					QuoteAssetVolume:         v.QuoteAssetVolume,
+					TradeNum:                 v.TradeNum,
+					TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
+					TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
+				}
+
+				s.klinesList.PushBack(t)
+			}
+		}
+
+		defer s.initDone()
+
+		break
+	}
+}
+
 func (s *KlinesSrv) wsHandler(event interface{}) {
 	if s.klinesList == nil {
-		for d := tool.NewDelayIterator(); ; d.Delay() {
-			var klines interface{}
-			var err error
-			if s.si.Class == SPOT {
-				SpotLimiter.WaitN(s.ctx, 1)
-				klines, err = spot.NewClient("", "").NewKlinesService().
-					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
-					Do(s.ctx)
-			} else {
-				FuturesLimiter.WaitN(s.ctx, 5)
-				klines, err = futures.NewClient("", "").NewKlinesService().
-					Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
-					Do(s.ctx)
-			}
-			if err != nil {
-				log.Errorf("%s.Get init klines error!Error:%s", s.si, err)
-				continue
-			}
-
-			s.klinesList = list.New()
-
-			if vi, ok := klines.([]*spot.Kline); ok {
-				for _, v := range vi {
-					t := &Kline{
-						OpenTime:                 v.OpenTime,
-						Open:                     v.Open,
-						High:                     v.High,
-						Low:                      v.Low,
-						Close:                    v.Close,
-						Volume:                   v.Volume,
-						CloseTime:                v.CloseTime,
-						QuoteAssetVolume:         v.QuoteAssetVolume,
-						TradeNum:                 v.TradeNum,
-						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
-						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-					}
-
-					s.klinesList.PushBack(t)
-				}
-			} else if vi, ok := klines.([]*futures.Kline); ok {
-				for _, v := range vi {
-					t := &Kline{
-						OpenTime:                 v.OpenTime,
-						Open:                     v.Open,
-						High:                     v.High,
-						Low:                      v.Low,
-						Close:                    v.Close,
-						Volume:                   v.Volume,
-						CloseTime:                v.CloseTime,
-						QuoteAssetVolume:         v.QuoteAssetVolume,
-						TradeNum:                 v.TradeNum,
-						TakerBuyBaseAssetVolume:  v.TakerBuyBaseAssetVolume,
-						TakerBuyQuoteAssetVolume: v.TakerBuyQuoteAssetVolume,
-					}
-
-					s.klinesList.PushBack(t)
-				}
-			}
-
-			defer s.initDone()
-
-			break
-		}
+		s.initKlineData()
 	}
 
 	// Merge kline
