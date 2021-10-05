@@ -2,6 +2,8 @@
 binance proxy
 local `candle` and `orderbook` and `exchangeinfo`
 
+not support `24hour`.Please use orderbook instead
+
 ```
       -f string
             futures bind address. (default ":8091")
