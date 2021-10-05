@@ -16,9 +16,11 @@ type Service struct {
 	exchangeInfoSrv *ExchangeInfoSrv
 	klinesSrv       sync.Map // map[symbolInterval]*Klines
 	depthSrv        sync.Map // map[symbolInterval]*Depth
+	tickerSrv       sync.Map // map[symbolInterval]*Ticker
 
 	lastGetKlines sync.Map // map[symbolInterval]time.Time
 	lastGetDepth  sync.Map // map[symbolInterval]time.Time
+	lastGetTicker sync.Map // map[symbolInterval]time.Time
 }
 
 func NewService(ctx context.Context, class Class) *Service {
@@ -45,10 +47,6 @@ func NewService(ctx context.Context, class Class) *Service {
 	}()
 
 	return s
-}
-
-func (s *Service) ExchangeInfo() []byte {
-	return s.exchangeInfoSrv.GetExchangeInfo()
 }
 
 func (s *Service) autoRemoveExpired() {
@@ -88,6 +86,41 @@ func (s *Service) autoRemoveExpired() {
 
 		return true
 	})
+	s.tickerSrv.Range(func(k, v interface{}) bool {
+		si := k.(symbolInterval)
+		srv := v.(*TickerSrv)
+
+		if t, ok := s.lastGetTicker.Load(si); ok {
+			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
+				log.Debugf("%s.Ticker srv expired!Removed", si)
+				s.lastGetTicker.Delete(si)
+
+				s.tickerSrv.Delete(si)
+				srv.Stop()
+			}
+		} else {
+			s.lastGetTicker.Store(si, time.Now())
+		}
+
+		return true
+	})
+}
+
+func (s *Service) Ticker(symbol string) *Ticker24hr {
+	si := NewSymbolInterval(s.class, symbol, "")
+	srv, loaded := s.tickerSrv.Load(*si)
+	if !loaded {
+		if srv, loaded = s.tickerSrv.LoadOrStore(*si, NewTickerSrv(s.ctx, si)); loaded == false {
+			srv.(*TickerSrv).Start()
+		}
+	}
+	s.lastGetTicker.Store(*si, time.Now())
+
+	return srv.(*TickerSrv).GetTicker()
+}
+
+func (s *Service) ExchangeInfo() []byte {
+	return s.exchangeInfoSrv.GetExchangeInfo()
 }
 
 func (s *Service) Klines(symbol, interval string) []*Kline {
@@ -115,13 +148,3 @@ func (s *Service) Depth(symbol string) *Depth {
 
 	return srv.(*DepthSrv).GetDepth()
 }
-
-// func (s *Service) autoRemoveDepthSrv(symbol string) *Depth {
-// 	si := NewSymbolInterval(s.class, symbol, "")
-// 	srv, loaded := s.klinesSrv.LoadOrStore(*si, NewDepthSrv(s.ctx, si))
-// 	if loaded == false {
-// 		srv.(*DepthSrv).Start()
-// 	}
-
-// 	return srv.(*DepthSrv).GetDepth()
-// }
