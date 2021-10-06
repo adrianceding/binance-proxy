@@ -20,7 +20,6 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 	case err != nil, limitInt <= 0, limitInt > 1000,
 		r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "",
 		symbol == "", interval == "":
-
 		s.reverseProxy(w, r)
 		return
 	}

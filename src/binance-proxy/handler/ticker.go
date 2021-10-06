@@ -8,6 +8,10 @@ import (
 func (s *Handler) ticker(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 
+	if symbol == "" {
+		s.reverseProxy(w, r)
+		return
+	}
 	ticker := s.srv.Ticker(symbol)
 	if ticker == nil {
 		s.reverseProxy(w, r)

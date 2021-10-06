@@ -4,6 +4,8 @@ import (
 	"binance-proxy/tool"
 	"container/list"
 	"context"
+	"net/http"
+	"net/url"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -103,12 +105,16 @@ func (s *KlinesSrv) initKlineData() {
 	var err error
 	for d := tool.NewDelayIterator(); ; d.Delay() {
 		if s.si.Class == SPOT {
-			SpotLimiter.WaitN(s.ctx, 1)
+			RateWait(s.ctx, s.si.Class, http.MethodGet, "/api/v3/klines", url.Values{
+				"limit": []string{"1000"},
+			})
 			klines, err = spot.NewClient("", "").NewKlinesService().
 				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 				Do(s.ctx)
 		} else {
-			FuturesLimiter.WaitN(s.ctx, 5)
+			RateWait(s.ctx, s.si.Class, http.MethodGet, "/fapi/v1/klines", url.Values{
+				"limit": []string{"1000"},
+			})
 			klines, err = futures.NewClient("", "").NewKlinesService().
 				Symbol(s.si.Symbol).Interval(s.si.Interval).Limit(1000).
 				Do(s.ctx)

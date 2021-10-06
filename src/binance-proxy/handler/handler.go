@@ -16,11 +16,15 @@ func NewHandler(ctx context.Context, class service.Class, enableFakeKline bool) 
 		class:           class,
 		enableFakeKline: enableFakeKline,
 	}
+	handler.ctx, handler.cancel = context.WithCancel(ctx)
 
 	return handler.Router
 }
 
 type Handler struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	class           service.Class
 	srv             *service.Service
 	enableFakeKline bool
@@ -48,6 +52,8 @@ func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
 func (s *Handler) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("%s reverse proxy.Path:%s", s.class, r.URL.RequestURI())
 
+	service.RateWait(s.ctx, s.class, r.Method, r.URL.Path, r.URL.Query())
+
 	var u *url.URL
 	if s.class == service.SPOT {
 		r.Host = "api.binance.com"
@@ -55,12 +61,6 @@ func (s *Handler) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	} else {
 		r.Host = "fapi.binance.com"
 		u, _ = url.Parse("https://fapi.binance.com")
-	}
-
-	if s.class == service.SPOT {
-		service.SpotLimiter.WaitN(context.Background(), 1)
-	} else {
-		service.FuturesLimiter.WaitN(context.Background(), 5)
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
