@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"binance-proxy/tool"
+	"binance-proxy/internal/tool"
 
 	log "github.com/sirupsen/logrus"
 )

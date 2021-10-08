@@ -1,8 +1,8 @@
 package main
 
 import (
-	"binance-proxy/handler"
-	"binance-proxy/service"
+	"binance-proxy/internal/handler"
+	"binance-proxy/internal/service"
 	"context"
 	"flag"
 	"net/http"

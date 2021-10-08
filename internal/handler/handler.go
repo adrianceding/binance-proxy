@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"binance-proxy/service"
+	"binance-proxy/internal/service"
 	"context"
 	"net/http"
 	"net/http/httputil"

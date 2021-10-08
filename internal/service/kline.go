@@ -1,7 +1,7 @@
 package service
 
 import (
-	"binance-proxy/tool"
+	"binance-proxy/internal/tool"
 	"container/list"
 	"context"
 	"net/http"
