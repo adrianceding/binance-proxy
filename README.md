@@ -1,8 +1,6 @@
 # binance-proxy
 binance proxy
-local `candle` and `orderbook` and `exchangeinfo`
-
-not support `24hour`.Please use orderbook instead
+local `candle`, `ticker24hr`, `orderbook` and `exchangeinfo`
 
 ```
       -f string
