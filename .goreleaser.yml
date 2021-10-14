@@ -6,6 +6,8 @@ builds:
   - main: ./cmd/binance-proxy
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - "-s -w -X main.Version='{{.Env.GOLDFLAGS_VERSION}}' -X main.Buildtime='{{.Env.GOLDFLAGS_BUILD_TIME}}'"
     goos:
       - linux
       - windows
@@ -69,4 +71,4 @@ docker_manifests:
 - name_template: docker.io/nightshift2k/{{ .ProjectName }}:latest
   image_templates:
   - docker.io/nightshift2k/{{ .ProjectName }}:{{ .Version }}-amd64
-  - docker.io/nightshift2k/{{ .ProjectName }}:{{ .Version }}-arm64v8      
+  - docker.io/nightshift2k/{{ .ProjectName }}:{{ .Version }}-arm64v8

@@ -48,9 +48,11 @@ type Config struct {
 }
 
 var (
-	ctx, cancel = context.WithCancel(context.Background())
 	config      Config
-	parser      = flags.NewParser(&config, flags.Default)
+	parser             = flags.NewParser(&config, flags.Default)
+	Version     string = "develop"
+	Buildtime   string = "undefined"
+	ctx, cancel        = context.WithCancel(context.Background())
 )
 
 func main() {
@@ -58,6 +60,8 @@ func main() {
 		DisableColors: true,
 		FullTimestamp: true,
 	})
+
+	log.Infof("Binance proxy version %s, build time %s", Version, Buildtime)
 
 	if _, err := parser.Parse(); err != nil {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {

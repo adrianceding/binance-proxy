@@ -1,8 +1,15 @@
-PROJECT := binance-proxy
-VERSION := $(git describe --abbrev=0 --tags)
-LD_FLAGS := -X main.version=$(VERSION) -s -w
-SOURCE_FILES ?= ./internal/... ./pkg/... ./cmd/...
-UNAME := $(uname -s)
+PROJECT					:= binance-proxy
+VERSION					:= $(shell git describe --abbrev=0 --tags)
+COMMIT_HASH     		:= $(shell git rev-parse --short HEAD)
+GOLDFLAGS_VERSION 		:= $(VERSION)-$(COMMIT_HASH)
+GOLDFLAGS_BUILD_TIME	:= $(shell date -Is)
+LD_FLAGS 				:= -X main.Version='$(GOLDFLAGS_VERSION)' -X main.Buildtime='$(GOLDFLAGS_BUILD_TIME)' -s -w
+SOURCE_FILES 			?= ./internal/... ./pkg/... ./cmd/...
+UNAME 					:= $(uname -s)
+
+$(info GOLDFLAGS_VERSION=$(GOLDFLAGS_VERSION))
+$(info GOLDFLAGS_BUILD_TIME=$(GOLDFLAGS_BUILD_TIME))
+$(info LD_FLAGS=$(LD_FLAGS))
 
 export CGO_ENABLED=0
 export GO111MODULE=on

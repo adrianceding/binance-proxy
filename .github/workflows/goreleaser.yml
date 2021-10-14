@@ -19,6 +19,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Declare environment variables
+        id: vars
+        shell: bash
+        run: |
+          echo "GOLDFLAGS_VERSION=$(echo $GITHUB_SHA | cut -c 1-6)-$(shell git describe --abbrev=0 --tags)" >> $GITHUB_ENV
+          echo "GOLDFLAGS_BUILD_TIME=$(date -Is)" >> $GITHUB_ENV
+
+      - name: Show build information
+        run: |
+          echo "Building version: ${{ env.GOLDFLAGS_VERSION }}"
+          echo "Build time: ${{ env.GOLDFLAGS_BUILD_TIME }}"
+          echo "Runner name: ${{ env.RUNNER_NAME }}"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
 
@@ -27,7 +40,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-  
+ 
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
