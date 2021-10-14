@@ -12,12 +12,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewHandler(ctx context.Context, class service.Class, enableFakeKline bool, allwaysShowForwards bool) func(w http.ResponseWriter, r *http.Request) {
+func NewHandler(ctx context.Context, class service.Class, enableFakeKline bool, alwaysShowForwards bool) func(w http.ResponseWriter, r *http.Request) {
 	handler := &Handler{
-		srv:                 service.NewService(ctx, class),
-		class:               class,
-		enableFakeKline:     enableFakeKline,
-		allwaysShowForwards: allwaysShowForwards,
+		srv:                service.NewService(ctx, class),
+		class:              class,
+		enableFakeKline:    enableFakeKline,
+		alwaysShowForwards: alwaysShowForwards,
 	}
 	handler.ctx, handler.cancel = context.WithCancel(ctx)
 
@@ -28,10 +28,10 @@ type Handler struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	class               service.Class
-	srv                 *service.Service
-	enableFakeKline     bool
-	allwaysShowForwards bool
+	class              service.Class
+	srv                *service.Service
+	enableFakeKline    bool
+	alwaysShowForwards bool
 }
 
 func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
 
 func (s *Handler) reverseProxy(w http.ResponseWriter, r *http.Request) {
 	msg := fmt.Sprintf("%s request %s %s from %s is not cachable", s.class, r.Method, r.RequestURI, r.RemoteAddr)
-	if s.allwaysShowForwards {
+	if s.alwaysShowForwards {
 		log.Infof(msg)
 	} else {
 		log.Tracef(msg)

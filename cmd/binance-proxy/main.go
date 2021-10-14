@@ -16,10 +16,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func startProxy(ctx context.Context, port int, class service.Class, disablefakekline bool, allwaysshowforwards bool) {
+func startProxy(ctx context.Context, port int, class service.Class, disablefakekline bool, alwaysshowforwards bool) {
 	mux := http.NewServeMux()
 	address := fmt.Sprintf(":%d", port)
-	mux.HandleFunc("/", handler.NewHandler(ctx, class, !disablefakekline, allwaysshowforwards))
+	mux.HandleFunc("/", handler.NewHandler(ctx, class, !disablefakekline, alwaysshowforwards))
 
 	log.Infof("%s websocket proxy starting on port %d.", class, port)
 	if err := http.ListenAndServe(address, mux); err != nil {
@@ -39,13 +39,13 @@ func handleSignal() {
 }
 
 type Config struct {
-	Verbose             []bool `short:"v" long:"verbose" env:"BPX_VERBOSE" description:"Verbose output (increase with -vv)"`
-	SpotAddress         int    `short:"p" long:"port-spot" env:"BPX_PORT_SPOT" description:"Port to which to bind for SPOT markets" default:"8090"`
-	FuturesAddress      int    `short:"t" long:"port-futures" env:"BPX_PORT_FUTURES" description:"Port to which to bind for FUTURES markets" default:"8091"`
-	DisableFakeKline    bool   `short:"c" long:"disable-fake-candles" env:"BPX_DISABLE_FAKE_CANDLES" description:"Disable generation of fake candles (ohlcv) when sockets have not delivered data yet"`
-	DisableSpot         bool   `short:"s" long:"disable-spot" env:"BPX_DISABLE_SPOT" description:"Disable proxying spot markets"`
-	DisableFutures      bool   `short:"f" long:"disable-futures" env:"BPX_DISABLE_FUTURES" description:"Disable proxying futures markets"`
-	AllwaysShowForwards bool   `short:"a" long:"allways-show-forwards" env:"BPX_ALLWAYS_SHOW_FORWARDS" description:"Allways show requests forwarded via REST even if verbose is disabled"`
+	Verbose            []bool `short:"v" long:"verbose" env:"BPX_VERBOSE" description:"Verbose output (increase with -vv)"`
+	SpotAddress        int    `short:"p" long:"port-spot" env:"BPX_PORT_SPOT" description:"Port to which to bind for SPOT markets" default:"8090"`
+	FuturesAddress     int    `short:"t" long:"port-futures" env:"BPX_PORT_FUTURES" description:"Port to which to bind for FUTURES markets" default:"8091"`
+	DisableFakeKline   bool   `short:"c" long:"disable-fake-candles" env:"BPX_DISABLE_FAKE_CANDLES" description:"Disable generation of fake candles (ohlcv) when sockets have not delivered data yet"`
+	DisableSpot        bool   `short:"s" long:"disable-spot" env:"BPX_DISABLE_SPOT" description:"Disable proxying spot markets"`
+	DisableFutures     bool   `short:"f" long:"disable-futures" env:"BPX_DISABLE_FUTURES" description:"Disable proxying futures markets"`
+	AlwaysShowForwards bool   `short:"a" long:"always-show-forwards" env:"BPX_ALWAYS_SHOW_FORWARDS" description:"Always show requests forwarded via REST even if verbose is disabled"`
 }
 
 var (
@@ -92,17 +92,17 @@ func main() {
 		log.Infof("Fake candles are enabled for faster processing, the feature can be disabled with --disable-fake-candles or -c")
 	}
 
-	if config.AllwaysShowForwards {
-		log.Infof("Allways show forwards is enabled, all API requests, that can't be served from websockets cached will be logged.")
+	if config.AlwaysShowForwards {
+		log.Infof("Always show forwards is enabled, all API requests, that can't be served from websockets cached will be logged.")
 	}
 
 	go handleSignal()
 
 	if !config.DisableSpot {
-		go startProxy(ctx, config.SpotAddress, service.SPOT, config.DisableFakeKline, config.AllwaysShowForwards)
+		go startProxy(ctx, config.SpotAddress, service.SPOT, config.DisableFakeKline, config.AlwaysShowForwards)
 	}
 	if !config.DisableFutures {
-		go startProxy(ctx, config.FuturesAddress, service.FUTURES, config.DisableFakeKline, config.AllwaysShowForwards)
+		go startProxy(ctx, config.FuturesAddress, service.FUTURES, config.DisableFakeKline, config.AlwaysShowForwards)
 	}
 	<-ctx.Done()
 

@@ -51,7 +51,7 @@ Application Options:
   -c, --disable-fake-candles   Disable generation of fake candles (ohlcv) when sockets have not delivered data yet [$BPX_DISABLE_FAKE_CANDLES]
   -s, --disable-spot           Disable proxying spot markets [$BPX_DISABLE_SPOT]
   -f, --disable-futures        Disable proxying futures markets [$BPX_DISABLE_FUTURES]
-  -a, --allways-show-forwards  Allways show requests forwarded via REST even if verbose is disabled [$BPX_ALLWAYS_SHOW_FORWARDS]
+  -a, --always-show-forwards   Always show requests forwarded via REST even if verbose is disabled [$BPX_ALWAYS_SHOW_FORWARDS]
 
 Help Options:
   -h, --help                   Show this help message
@@ -108,7 +108,7 @@ binance-proxy [OPTION]
 | `-c`   | Disables the generation of fake candles, when not yet recieved through websockets. | `bool` | `false` | No        |
 | `-s`   | Disables proxy for **SPOT** markets. | `bool` | `false` | No        |
 | `-f`   | Disables proxy for **FUTURES** markets. | `bool` | `false` | No        |
-| `-a`   | Allways show requests forwarded via REST even if verbose is disabled | `bool` | `false` | No        |
+| `-a`   | Always show requests forwarded via REST even if verbose is disabled | `bool` | `false` | No        |
 
 ## 🐞 Bug / Feature Request
 
