@@ -1,4 +1,5 @@
 
+
 <h1 align="center">  Binance Proxy</h1>
 <p align="center">
 A fast and simple <b>Websocket Proxy</b> for the <b>Binance API</b> written in <b>GoLang</b>. Mimics the behavior of API endpoints to avoid rate limiting imposed on IP's when using REST queries. Intended Usage for multiple instances of applications querying the Binance API at a rate that might lead to banning or blocking, like for example the <a href="https://github.com/freqtrade/freqtrade">Freqtrade Trading Bot</a>, or any other similar application. </p>
@@ -82,11 +83,12 @@ This example assumes, that `binance-proxy` is running on the same host as the co
 ## ➡️ Supported API endpoints for caching
 | Endpoint | Market | Purpose |  Socket Update Interval | Comments |
 |----------|--------|---------|----------|---------|
-|`/api/v3/klines`<br/>`/fapi/v1/klines`|spot/futures|Kline/candlestick bars for a symbol|~ 2s|Websocket is closed if there is no following request after `2 * interval_time` (for example: A websocket for a symbol on `5m` timeframe is closed after 10 minutes.<br/><br/>Following requests for `klines` can not be delievered from the websocket cache:<br/><li>`limit` parameter is > 1000</ul><li>`startTime` or `endTime` have been specified</ul>
+|`/api/v3/klines`<br/>`/fapi/v1/klines`| spot/futures | Kline/candlestick bars for a symbol|~ 2s|Websocket is closed if there is no following request after `2 * interval_time` (for example: A websocket for a symbol on `5m` timeframe is closed after 10 minutes.<br/><br/>Following requests for `klines` can not be delievered from the websocket cache:<br/><li>`limit` parameter is > 1000</ul><li>`startTime` or `endTime` have been specified</ul>|
 |`/api/v3/depth`<br/>`/fapi/v1/depth`|spot/futures|Order Book (Depth)|100ms|Websocket is closed if there is no following request after 2 minutes.<br/><br/>The `depth` endpoint serves only a maximum depth of 20.|
-|`/api/v3/ticker/24hr`|spot|24hr ticker price change statistics|2s/100ms (see comments)|Websocket is closed if there is no following request after 2 minutes.<br/><br/>For faster updates the values for <li>`lastPrice`</ul><li>`bidPrice`</ul><li>`askPrice`</ul><br>are taken from the `bookTicker` which is updated in an interval of 100ms.
-|`/api/v3/exchangeInfo`<br/>`/fapi/v1/exchangeInfo`|spot/futures|Current exchange trading rules and symbol information|60s (see comments)|`exchangeInfo` is fetched periodically via REST every 60 seconds. It is not a websocket endpoint but just being cached during runtime.|
-🚨 Every **other** endpoint queried is being **forwareded** 1:1 to the **API** at https://api.binance.com !
+|`/api/v3/ticker/24hr`|spot|24hr ticker price change statistics|2s/100ms (see comments)|Websocket is closed if there is no following request after 2 minutes.<br/><br/>For faster updates the values for <li>`lastPrice`</ul><li>`bidPrice`</ul><li>`askPrice`</ul><br>are taken from the `bookTicker` which is updated in an interval of 100ms.|
+|`/api/v3/exchangeInfo`<br/>`/fapi/v1/exchangeInfo`| spot/futures| Current exchange trading rules and symbol information|60s (see comments)|`exchangeInfo` is fetched periodically via REST every 60 seconds. It is not a websocket endpoint but just being cached during runtime.|
+
+> 🚨 Every **other** endpoint queried is being **forwareded** 1:1 to the **API** at https://api.binance.com !
 
 
 ## ⚙️ Commands & Options
@@ -99,7 +101,7 @@ binance-proxy [OPTION]
 | Option | Description                                              | Type   | Default | Required? |
 | ------ | -------------------------------------------------------- | ------ | ------- | --------- |
 | `-v`   | Sets the verbosity to debug level. | `bool` | `false` | No        |
-| `-vv`   | Sets the verbosity to trace level. | `bool` | `false` | No        |
+| `-vv`  | Sets the verbosity to trace level. | `bool` | `false` | No        |
 | `-p`   | Specifies the listen port for **SPOT** market proxy. | `int` | `8090` | No        |
 | `-t`   | Specifies the listen port for **FUTURES** market proxy. | `int` | `8091` | No        |
 | `-c`   | Disables the generation of fake candles, when not yet recieved through websockets. | `bool` | `false` | No        |
@@ -124,7 +126,6 @@ To fix a bug or enhance an existing module, follow these steps:
 - Commit your changes (`git commit -am 'Improve feature'`)
 - Push to the branch (`git push origin improve-feature`)
 - Create a Pull Request
-
 
 ## 🙏 Credits
 + [@adrianceding](https://github.com/adrianceding) for creating the original version, available [here](https://github.com/adrianceding/binance-proxy).
