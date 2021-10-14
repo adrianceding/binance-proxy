@@ -45,15 +45,16 @@ Usage:
   binance-proxy [OPTIONS]
 
 Application Options:
-  -v, --verbose               Verbose output (increase with -vv)
-  -p, --port-spot=            Port to which to bind for SPOT markets (default: 8090)
-  -t, --port-futures=         Port to which to bind for FUTURES markets (default: 8091)
-  -c, --disable-fake-candles  Disable generation of fake candles (ohlcv) when sockets have not delivered data yet
-  -s, --disable-spot          Disable proxying spot markets
-  -f, --disable-futures       Disable proxying futures markets
+  -v, --verbose                Verbose output (increase with -vv) [$BPX_VERBOSE]
+  -p, --port-spot=             Port to which to bind for SPOT markets (default: 8090) [$BPX_PORT_SPOT]
+  -t, --port-futures=          Port to which to bind for FUTURES markets (default: 8091) [$BPX_PORT_FUTURES]
+  -c, --disable-fake-candles   Disable generation of fake candles (ohlcv) when sockets have not delivered data yet [$BPX_DISABLE_FAKE_CANDLES]
+  -s, --disable-spot           Disable proxying spot markets [$BPX_DISABLE_SPOT]
+  -f, --disable-futures        Disable proxying futures markets [$BPX_DISABLE_FUTURES]
+  -a, --allways-show-forwards  Allways show requests forwarded via REST even if verbose is disabled [$BPX_ALLWAYS_SHOW_FORWARDS]
 
 Help Options:
-  -h, --help
+  -h, --help                   Show this help message
 ```
 ### 🪙 Example Usage with Freqtrade
 **Freqtrade** needs to be aware, that the **API endpoint** for querying the exchange is not the public endpoint, which is usually `https://api.binance.com` but instead queries are being proxied. To achieve that, the appropriate `config.json` needs to be adjusted in the `{ exchange: { urls: { api: public: "..."} } }` section.
@@ -107,6 +108,7 @@ binance-proxy [OPTION]
 | `-c`   | Disables the generation of fake candles, when not yet recieved through websockets. | `bool` | `false` | No        |
 | `-s`   | Disables proxy for **SPOT** markets. | `bool` | `false` | No        |
 | `-f`   | Disables proxy for **FUTURES** markets. | `bool` | `false` | No        |
+| `-a`   | Allways show requests forwarded via REST even if verbose is disabled | `bool` | `false` | No        |
 
 ## 🐞 Bug / Feature Request
 
