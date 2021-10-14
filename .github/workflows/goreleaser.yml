@@ -23,7 +23,7 @@ jobs:
         id: vars
         shell: bash
         run: |
-          echo "GOLDFLAGS_VERSION=$(echo $GITHUB_SHA | cut -c 1-6)-$(git describe --abbrev=0 --tags)" >> $GITHUB_ENV
+          echo "GOLDFLAGS_VERSION=$(git describe --abbrev=0 --tags)-$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
           echo "GOLDFLAGS_BUILD_TIME=$(date -Is)" >> $GITHUB_ENV
 
       - name: Show build information
