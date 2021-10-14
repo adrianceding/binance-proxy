@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -31,6 +32,8 @@ type Handler struct {
 }
 
 func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
 	switch r.URL.Path {
 	case "/api/v3/klines", "/fapi/v1/klines":
 		s.klines(w, r)
@@ -47,10 +50,12 @@ func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.reverseProxy(w, r)
 	}
+	duration := time.Since(start)
+	log.Debugf("%s request %s %s from %s served in %s", s.class, r.Method, r.RequestURI, r.RemoteAddr, duration)
 }
 
 func (s *Handler) reverseProxy(w http.ResponseWriter, r *http.Request) {
-	log.Debugf("%s reverse proxy.Path:%s", s.class, r.URL.RequestURI())
+	log.Tracef("%s request %s %s from %s is not cachable", s.class, r.Method, r.RequestURI, r.RemoteAddr)
 
 	service.RateWait(s.ctx, s.class, r.Method, r.URL.Path, r.URL.Query())
 

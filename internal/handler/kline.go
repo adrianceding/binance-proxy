@@ -5,9 +5,13 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
+
+	var fakeKlineTimestampOpen int64 = 0
 	symbol := r.URL.Query().Get("symbol")
 	interval := r.URL.Query().Get("interval")
 	limit := r.URL.Query().Get("limit")
@@ -17,15 +21,15 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 	limitInt, err := strconv.Atoi(limit)
 
 	switch {
-	case err != nil, limitInt <= 0, limitInt > 1000,
-		r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "",
-		symbol == "", interval == "":
+	case err != nil, limitInt <= 0, limitInt > 1000, r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "", symbol == "", interval == "":
+		log.Tracef("%s %s@%s kline proxying via REST", s.class, symbol, interval)
 		s.reverseProxy(w, r)
 		return
 	}
 
 	data := s.srv.Klines(symbol, interval)
 	if data == nil {
+		log.Tracef("%s %s@%s kline proxying via REST", s.class, symbol, interval)
 		s.reverseProxy(w, r)
 		return
 	}
@@ -53,8 +57,14 @@ func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 			"0",
 		}
 	}
+	if len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
+		fakeKlineTimestampOpen = data[len(data)-1].CloseTime + 1
+		log.Tracef("%s %s@%s kline requested for %s but not yet received", s.class, symbol, interval, strconv.FormatInt(fakeKlineTimestampOpen, 10))
+	}
 
 	if s.enableFakeKline && len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
+		fakeKlineTimestampOpen = data[len(data)-1].CloseTime + 1
+		log.Tracef("%s %s@%s kline faking candle for timestamp %s", s.class, symbol, interval, strconv.FormatInt(fakeKlineTimestampOpen, 10))
 		klines = append(klines, []interface{}{
 			data[len(data)-1].CloseTime + 1,
 			data[len(data)-1].Close,

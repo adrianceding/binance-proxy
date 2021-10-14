@@ -31,6 +31,7 @@ func NewExchangeInfoSrv(ctx context.Context, si *symbolInterval) *ExchangeInfoSr
 		si:         si,
 		refreshDur: 60 * time.Second,
 	}
+	log.Tracef("%s exchangeInfo initialization with refresh of %.0fs.", s.si.Class, s.refreshDur.Seconds())
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.initCtx, s.initDone = context.WithCancel(context.Background())
 
@@ -87,7 +88,8 @@ func (s *ExchangeInfoSrv) refreshExchangeInfo() error {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Errorf("%s exchangeInfo init error!Error:%s", s.si, err)
+		log.Errorf("%s exchangeInfo refresh failed, error: %s.", s.si.Class, err)
+
 		return err
 	}
 	defer resp.Body.Close()
@@ -106,7 +108,7 @@ func (s *ExchangeInfoSrv) refreshExchangeInfo() error {
 
 	s.exchangeInfo = data
 
-	log.Debugf("%s exchangeInfo refresh success!", s.si)
+	log.Debugf("%s exchangeInfo refreshed sucessfully.", s.si.Class)
 
 	return nil
 }

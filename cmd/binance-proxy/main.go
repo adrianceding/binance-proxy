@@ -4,7 +4,7 @@ import (
 	"binance-proxy/internal/handler"
 	"binance-proxy/internal/service"
 	"context"
-	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,21 +12,23 @@ import (
 
 	_ "net/http/pprof"
 
+	"github.com/jessevdk/go-flags"
 	log "github.com/sirupsen/logrus"
 )
 
-func startProxy(ctx context.Context, address string, class service.Class) {
+func startProxy(ctx context.Context, port int, class service.Class, disablefakekline bool) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler.NewHandler(ctx, class, flagEnableFakeKline))
+	address := fmt.Sprintf(":%d", port)
+	mux.HandleFunc("/", handler.NewHandler(ctx, class, !disablefakekline))
 
-	log.Infof("Start %s proxy !Address: %s", class, address)
+	log.Infof("%s websocket proxy starting on port %d.", class, port)
 	if err := http.ListenAndServe(address, mux); err != nil {
-		log.Fatalf("Start %s proxy failed!Error: %s", class, err)
+		log.Fatalf("%s websocket proxy start failed (error: %s).", class, err)
 	}
 }
 
 func handleSignal() {
-	signalChan := make(chan os.Signal)
+	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for s := range signalChan {
 		switch s {
@@ -36,33 +38,64 @@ func handleSignal() {
 	}
 }
 
-var ctx, cancel = context.WithCancel(context.Background())
-var flagSpotAddress string
-var flagFuturesAddress string
-var flagDebug bool
-var flagEnableFakeKline bool
+type Config struct {
+	Verbose          []bool `short:"v" long:"verbose" description:"Verbose output (increase with -vv)"`
+	SpotAddress      int    `short:"p" long:"port-spot" description:"Port to which to bind for SPOT markets" default:"8090"`
+	FuturesAddress   int    `short:"t" long:"port-futures" description:"Port to which to bind for FUTURES markets" default:"8091"`
+	DisableFakeKline bool   `short:"c" long:"disable-fake-candles" description:"Disable generation of fake candles (ohlcv) when sockets have not delivered data yet"`
+	DisableSpot      bool   `short:"s" long:"disable-spot" description:"Disable proxying spot markets"`
+	DisableFutures   bool   `short:"f" long:"disable-futures" description:"Disable proxying futures markets"`
+}
+
+var (
+	ctx, cancel = context.WithCancel(context.Background())
+	config      Config
+	parser      = flags.NewParser(&config, flags.Default)
+)
 
 func main() {
-	flag.StringVar(&flagSpotAddress, "s", ":8090", "spot bind address.")
-	flag.StringVar(&flagFuturesAddress, "f", ":8091", "futures bind address.")
-	flag.BoolVar(&flagEnableFakeKline, "fakekline", false, "enable fake kline.")
-	flag.BoolVar(&flagDebug, "v", false, "print debug log.")
-	flag.Parse()
+	log.SetFormatter(&log.TextFormatter{
+		DisableColors: true,
+		FullTimestamp: true,
+	})
 
-	if flagDebug {
-		log.SetLevel(log.DebugLevel)
+	if _, err := parser.Parse(); err != nil {
+		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
+			os.Exit(0)
+		} else {
+			log.Fatalf("%s - %s", err, flagsErr.Type)
+		}
 	}
 
-	go func() {
-		http.ListenAndServe("0.0.0.0:8888", nil)
-	}()
+	if len(config.Verbose) >= 2 {
+		log.SetLevel(log.TraceLevel)
+	} else if len(config.Verbose) == 1 {
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
+
+	if log.GetLevel() > log.InfoLevel {
+		log.Infof("Set level to %s", log.GetLevel())
+	}
+
+	if config.DisableSpot && config.DisableFutures {
+		log.Fatal("can't start if both SPOT and FUTURES are disabled!")
+	}
+
+	if !config.DisableFakeKline {
+		log.Infof("Fake candles are enabled for faster processing, the feature can be disabled with --disable-fake-candles or -c")
+	}
 
 	go handleSignal()
 
-	go startProxy(ctx, flagSpotAddress, service.SPOT)
-	go startProxy(ctx, flagFuturesAddress, service.FUTURES)
-
+	if !config.DisableSpot {
+		go startProxy(ctx, config.SpotAddress, service.SPOT, config.DisableFakeKline)
+	}
+	if !config.DisableFutures {
+		go startProxy(ctx, config.FuturesAddress, service.FUTURES, config.DisableFakeKline)
+	}
 	<-ctx.Done()
 
-	log.Info("User interrupted..")
+	log.Info("SIGINT received, aborting ...")
 }

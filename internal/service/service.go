@@ -55,8 +55,10 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*KlinesSrv)
 
 		if t, ok := s.lastGetKlines.Load(si); ok {
-			if time.Now().Sub(t.(time.Time)) > 2*INTERVAL_2_DURATION[si.Interval] {
-				log.Debugf("%s.Kline srv expired!Removed", si)
+			expiry := 2 * INTERVAL_2_DURATION[si.Interval]
+			if time.Now().Sub(t.(time.Time)) > expiry {
+				// log.Debugf("%s.Kline srv expired!Removed %d", si, expiry)
+				log.Debugf("%s %s@%s kline websocket closed after being idle for %.0fs.", si.Class, si.Symbol, si.Interval, expiry.Seconds())
 				s.lastGetKlines.Delete(si)
 
 				s.klinesSrv.Delete(si)
@@ -73,8 +75,9 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*DepthSrv)
 
 		if t, ok := s.lastGetDepth.Load(si); ok {
-			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
-				log.Debugf("%s.Depth srv expired!Removed", si)
+			expiry := 2 * time.Minute
+			if time.Now().Sub(t.(time.Time)) > expiry {
+				log.Debugf("%s %s depth websocket closed after being idle for %.0fs.", si.Class, si.Symbol, expiry.Seconds())
 				s.lastGetDepth.Delete(si)
 
 				s.depthSrv.Delete(si)
@@ -91,8 +94,10 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*TickerSrv)
 
 		if t, ok := s.lastGetTicker.Load(si); ok {
-			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
-				log.Debugf("%s.Ticker srv expired!Removed", si)
+			expiry := 2 * time.Minute
+			if time.Now().Sub(t.(time.Time)) > expiry {
+				// log.Debugf("%s.Ticker srv expired!Removed", si)
+				log.Debugf("%s %s ticker24hr websocket closed after being idle for %.0fs.", si.Class, si.Symbol, expiry.Seconds())
 				s.lastGetTicker.Delete(si)
 
 				s.tickerSrv.Delete(si)

@@ -50,11 +50,11 @@ func (s *DepthSrv) Start() {
 
 			doneC, stopC, err := s.connect()
 			if err != nil {
-				log.Errorf("%s.Websocket depth connect error!Error:%s", s.si, err)
+				log.Errorf("%s %s depth websocket connection error: %s.", s.si.Class, s.si.Symbol, err)
 				continue
 			}
 
-			log.Debugf("%s.Websocket depth connect success!", s.si)
+			log.Debugf("%s %s depth websocket connected.", s.si.Class, s.si.Symbol)
 			select {
 			case <-s.ctx.Done():
 				stopC <- struct{}{}
@@ -62,7 +62,7 @@ func (s *DepthSrv) Start() {
 			case <-doneC:
 			}
 
-			log.Debugf("%s.Websocket depth disconnected!Reconnecting", s.si)
+			log.Warnf("%s %s depth websocket disconnected, trying to reconnect.", s.si.Class, s.si.Symbol)
 		}
 	}()
 }
@@ -102,6 +102,7 @@ func (s *DepthSrv) wsHandlerFutures(event *futures.WsDepthEvent) {
 		Bids:         event.Bids,
 		Asks:         event.Asks,
 	}
+	log.Tracef("%s %s depth websocket message received", s.si.Class, s.si.Symbol)
 }
 
 func (s *DepthSrv) wsHandler(event *spot.WsPartialDepthEvent) {
@@ -119,8 +120,11 @@ func (s *DepthSrv) wsHandler(event *spot.WsPartialDepthEvent) {
 		Bids:         event.Bids,
 		Asks:         event.Asks,
 	}
+	log.Tracef("%s %s depth websocket message received", s.si.Class, s.si.Symbol)
+
 }
 
 func (s *DepthSrv) errHandler(err error) {
-	log.Errorf("%s.Depth websocket throw error!Error:%s", s.si, err)
+	log.Errorf("%s %s depth websocket connection error: %s.", s.si.Class, s.si.Symbol, err)
+
 }

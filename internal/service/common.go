@@ -25,10 +25,10 @@ type symbolInterval struct {
 	Symbol   string
 	Interval string
 }
-type Class int8
+type Class string
 
-var SPOT Class = 0
-var FUTURES Class = 1
+var SPOT Class = "SPOT"
+var FUTURES Class = "FUTURES"
 
 func NewSymbolInterval(class Class, symbol, interval string) *symbolInterval {
 	return &symbolInterval{Class: class, Symbol: symbol, Interval: interval}

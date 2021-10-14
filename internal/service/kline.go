@@ -59,19 +59,18 @@ func (s *KlinesSrv) Start() {
 
 			doneC, stopC, err := s.connect()
 			if err != nil {
-				log.Errorf("%s.Websocket klines connect error!Error:%s", s.si, err)
+				log.Errorf("%s %s@%s kline websocket connection error: %s.", s.si.Class, s.si.Symbol, s.si.Interval, err)
 				continue
 			}
 
-			log.Debugf("%s.Websocket klines connect success!", s.si)
+			log.Debugf("%s %s@%s kline websocket connected.", s.si.Class, s.si.Symbol, s.si.Interval)
 			select {
 			case <-s.ctx.Done():
 				stopC <- struct{}{}
 				return
 			case <-doneC:
 			}
-
-			log.Debugf("%s.Websocket klines disconnected!Reconnecting", s.si)
+			log.Warnf("%s %s@%s kline websocket disconnected, trying to reconnect.", s.si.Class, s.si.Symbol, s.si.Interval)
 		}
 	}()
 }
@@ -81,7 +80,7 @@ func (s *KlinesSrv) Stop() {
 }
 
 func (s *KlinesSrv) errHandler(err error) {
-	log.Errorf("%s.Klines websocket throw error!Error:%s", s.si, err)
+	log.Errorf("%s %s@%s kline websocket connection error: %s connected.", s.si.Class, s.si.Symbol, s.si.Interval, err)
 }
 
 func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
@@ -103,6 +102,7 @@ func (s *KlinesSrv) connect() (doneC, stopC chan struct{}, err error) {
 func (s *KlinesSrv) initKlineData() {
 	var klines interface{}
 	var err error
+	log.Debugf("%s %s@%s kline initialization through REST.", s.si.Class, s.si.Symbol, s.si.Interval)
 	for d := tool.NewDelayIterator(); ; d.Delay() {
 		if s.si.Class == SPOT {
 			RateWait(s.ctx, s.si.Class, http.MethodGet, "/api/v3/klines", url.Values{
@@ -120,7 +120,7 @@ func (s *KlinesSrv) initKlineData() {
 				Do(s.ctx)
 		}
 		if err != nil {
-			log.Errorf("%s.Get init klines error!Error:%s", s.si, err)
+			log.Errorf("%s %s@%s kline initialization via REST failed, error: %s.", s.si.Class, s.si.Symbol, s.si.Interval, err)
 			continue
 		}
 
@@ -206,6 +206,8 @@ func (s *KlinesSrv) wsHandler(event interface{}) {
 			TakerBuyQuoteAssetVolume: vi.Kline.ActiveBuyQuoteVolume,
 		}
 	}
+
+	log.Tracef("%s %s@%s kline websocket message received for open timestamp %d", s.si.Class, s.si.Symbol, s.si.Interval, k.OpenTime)
 
 	if s.klinesList.Back().Value.(*Kline).OpenTime < k.OpenTime {
 		s.klinesList.PushBack(k)
