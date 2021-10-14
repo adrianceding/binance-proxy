@@ -11,7 +11,7 @@ You can download the pre-compiled binary for the architecture of your choice fro
 
 Unzip the package to a folder of choice, preferably one that's in `$PATH`
 ```bash
-tar -xf binance-proxy_1.2.1_Linux_x86_64.tar.gz -C /usr/local/bin 
+tar -xf binance-proxy_1.2.2_Linux_x86_64.tar.gz -C /usr/local/bin 
 ```
 Starting the proxy:
 ```bash
@@ -88,7 +88,7 @@ This example assumes, that `binance-proxy` is running on the same host as the co
 |`/api/v3/ticker/24hr`|spot|24hr ticker price change statistics|2s/100ms (see comments)|Websocket is closed if there is no following request after 2 minutes.<br/><br/>For faster updates the values for <li>`lastPrice`</ul><li>`bidPrice`</ul><li>`askPrice`</ul><br>are taken from the `bookTicker` which is updated in an interval of 100ms.|
 |`/api/v3/exchangeInfo`<br/>`/fapi/v1/exchangeInfo`| spot/futures| Current exchange trading rules and symbol information|60s (see comments)|`exchangeInfo` is fetched periodically via REST every 60 seconds. It is not a websocket endpoint but just being cached during runtime.|
 
-> 🚨 Every **other** endpoint queried is being **forwareded** 1:1 to the **API** at https://api.binance.com !
+> 🚨 Every **other** REST query to an endpoint is being **forwarded** 1:1 to the **API** at https://api.binance.com !
 
 
 ## ⚙️ Commands & Options
