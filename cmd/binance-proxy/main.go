@@ -39,12 +39,12 @@ func handleSignal() {
 }
 
 type Config struct {
-	Verbose          []bool `short:"v" long:"verbose" description:"Verbose output (increase with -vv)"`
-	SpotAddress      int    `short:"p" long:"port-spot" description:"Port to which to bind for SPOT markets" default:"8090"`
-	FuturesAddress   int    `short:"t" long:"port-futures" description:"Port to which to bind for FUTURES markets" default:"8091"`
-	DisableFakeKline bool   `short:"c" long:"disable-fake-candles" description:"Disable generation of fake candles (ohlcv) when sockets have not delivered data yet"`
-	DisableSpot      bool   `short:"s" long:"disable-spot" description:"Disable proxying spot markets"`
-	DisableFutures   bool   `short:"f" long:"disable-futures" description:"Disable proxying futures markets"`
+	Verbose          []bool `short:"v" long:"verbose" env:"BPX_VERBOSE" description:"Verbose output (increase with -vv)"`
+	SpotAddress      int    `short:"p" long:"port-spot" env:"BPX_PORT_SPOT" description:"Port to which to bind for SPOT markets" default:"8090"`
+	FuturesAddress   int    `short:"t" long:"port-futures" env:"BPX_PORT_FUTURES" description:"Port to which to bind for FUTURES markets" default:"8091"`
+	DisableFakeKline bool   `short:"c" long:"disable-fake-candles" env:"BPX_DISABLE_FAKE_CANDLES" description:"Disable generation of fake candles (ohlcv) when sockets have not delivered data yet"`
+	DisableSpot      bool   `short:"s" long:"disable-spot" env:"BPX_DISABLE_SPOT" description:"Disable proxying spot markets"`
+	DisableFutures   bool   `short:"f" long:"disable-futures" env:"BPX_DISABLE_FUTURES" description:"Disable proxying futures markets"`
 }
 
 var (
