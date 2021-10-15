@@ -24,7 +24,7 @@ If you don't want to install or compile the binance-proxy to your system, feel f
 ```bash
 docker run --rm -d nightshift2k/binance-proxy:latest
 ```
-ℹ️ Please pay attention to configuring network access, per default the ports `8090` and `8091` are exposed, if you specifiy different ports via parameters, you will need to re-configure your docker setup. Please refer to the [docker network documentation](https://docs.docker.com/network/), how to adjust this inside a container.
+ℹ️ Please pay attention to configuring network access, per default the ports `8090` and `8091` are exposed, if you specify different ports via parameters, you will need to re-configure your docker setup. Please refer to the [docker network documentation](https://docs.docker.com/network/), how to adjust this inside a container.
 
 ## ⚒️ Installing from source
 
@@ -77,12 +77,12 @@ Help Options:
     }
 }
 ```
-This example assumes, that `binance-proxy` is running on the same host as the consuming application, thus `localhost` or `127.0.0.1` is used as the target address. Should `binance-proxy` run in a seperate 🐳 **Docker** container, a separate instance or a k8s pod, the target address has to be replaced respectively, and it needs to be ensured that the required ports (8090/8091 per default) are opened for requests.
+This example assumes, that `binance-proxy` is running on the same host as the consuming application, thus `localhost` or `127.0.0.1` is used as the target address. Should `binance-proxy` run in a separate 🐳 **Docker** container, a separate instance or a k8s pod, the target address has to be replaced respectively, and it needs to be ensured that the required ports (8090/8091 per default) are opened for requests.
 
 ## ➡️ Supported API endpoints for caching
 | Endpoint | Market | Purpose |  Socket Update Interval | Comments |
 |----------|--------|---------|----------|---------|
-|`/api/v3/klines`<br/>`/fapi/v1/klines`| spot/futures | Kline/candlestick bars for a symbol|~ 2s|Websocket is closed if there is no following request after `2 * interval_time` (for example: A websocket for a symbol on `5m` timeframe is closed after 10 minutes.<br/><br/>Following requests for `klines` can not be delievered from the websocket cache:<br/><li>`limit` parameter is > 1000</ul><li>`startTime` or `endTime` have been specified</ul>|
+|`/api/v3/klines`<br/>`/fapi/v1/klines`| spot/futures | Kline/candlestick bars for a symbol|~ 2s|Websocket is closed if there is no following request after `2 * interval_time` (for example: A websocket for a symbol on `5m` timeframe is closed after 10 minutes.<br/><br/>Following requests for `klines` can not be delivered from the websocket cache:<br/><li>`limit` parameter is > 1000</ul><li>`startTime` or `endTime` have been specified</ul>|
 |`/api/v3/depth`<br/>`/fapi/v1/depth`|spot/futures|Order Book (Depth)|100ms|Websocket is closed if there is no following request after 2 minutes.<br/><br/>The `depth` endpoint serves only a maximum depth of 20.|
 |`/api/v3/ticker/24hr`|spot|24hr ticker price change statistics|2s/100ms (see comments)|Websocket is closed if there is no following request after 2 minutes.<br/><br/>For faster updates the values for <li>`lastPrice`</ul><li>`bidPrice`</ul><li>`askPrice`</ul><br>are taken from the `bookTicker` which is updated in an interval of 100ms.|
 |`/api/v3/exchangeInfo`<br/>`/fapi/v1/exchangeInfo`| spot/futures| Current exchange trading rules and symbol information|60s (see comments)|`exchangeInfo` is fetched periodically via REST every 60 seconds. It is not a websocket endpoint but just being cached during runtime.|
@@ -92,7 +92,7 @@ This example assumes, that `binance-proxy` is running on the same host as the co
 
 ## ⚙️ Commands & Options
 
-The following parameters are available to control the behaviour of **binance-proxy**:
+The following parameters are available to control the behavior of **binance-proxy**:
 ```bash
 binance-proxy [OPTION]
 ```
