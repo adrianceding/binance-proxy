@@ -1,5 +1,6 @@
 
 
+
 <h1 align="center">  Binance Proxy</h1>
 <p align="center">
 A fast and simple <b>Websocket Proxy</b> for the <b>Binance API</b> written in <b>GoLang</b>. Mimics the behavior of API endpoints to avoid rate limiting imposed on IP's when using REST queries. Intended Usage for multiple instances of applications querying the Binance API at a rate that might lead to banning or blocking, like for example the <a href="https://github.com/freqtrade/freqtrade">Freqtrade Trading Bot</a>, or any other similar application. </p>
@@ -11,7 +12,7 @@ You can download the pre-compiled binary for the architecture of your choice fro
 
 Unzip the package to a folder of choice, preferably one that's in `$PATH`
 ```bash
-tar -xf binance-proxy_1.2.2_Linux_x86_64.tar.gz -C /usr/local/bin 
+tar -xf binance-proxy_1.2.4_Linux_x86_64.tar.gz -C /usr/local/bin 
 ```
 Starting the proxy:
 ```bash
@@ -99,16 +100,20 @@ The following parameters are available to control the behaviour of **binance-pro
 binance-proxy [OPTION]
 ```
 
-| Option | Description                                              | Type   | Default | Required? |
-| ------ | -------------------------------------------------------- | ------ | ------- | --------- |
-| `-v`   | Sets the verbosity to debug level. | `bool` | `false` | No        |
-| `-vv`  | Sets the verbosity to trace level. | `bool` | `false` | No        |
-| `-p`   | Specifies the listen port for **SPOT** market proxy. | `int` | `8090` | No        |
-| `-t`   | Specifies the listen port for **FUTURES** market proxy. | `int` | `8091` | No        |
-| `-c`   | Disables the generation of fake candles, when not yet recieved through websockets. | `bool` | `false` | No        |
-| `-s`   | Disables proxy for **SPOT** markets. | `bool` | `false` | No        |
-| `-f`   | Disables proxy for **FUTURES** markets. | `bool` | `false` | No        |
-| `-a`   | Always show requests forwarded via REST even if verbose is disabled | `bool` | `false` | No        |
+| Option | Environment Variable | Description                                              | Type   | Default | Required? |
+| ------ | ------------------|-------------------------------------- | ------ | ------- | --------- |
+| `-v`   | `$BPX_VERBOSE` | Sets the verbosity to debug level. | `bool` | `false` | No        |
+| `-vv`  |`$BPX_VERBOSE`| Sets the verbosity to trace level. | `bool` | `false` | No        |
+| `-p`   |`$BPX_PORT_SPOT`| Specifies the listen port for **SPOT** market proxy. | `int` | `8090` | No        |
+| `-t`   |`$BPX_PORT_FUTURES`| Specifies the listen port for **FUTURES** market proxy. | `int` | `8091` | No        |
+| `-c`   |`$BPX_DISABLE_FAKE_CANDLES`| Disables the generation of fake candles, when not yet recieved through websockets. | `bool` | `false` | No        |
+| `-s`   |`$BPX_DISABLE_SPOT`| Disables proxy for **SPOT** markets. | `bool` | `false` | No        |
+| `-f`   |`$BPX_DISABLE_FUTURES`| Disables proxy for **FUTURES** markets. | `bool` | `false` | No        |
+| `-a`   |`$BPX_ALWAYS_SHOW_FORWARDS`| Always show requests forwarded via REST even if verbose is disabled | `bool` | `false` | No        |
+
+Instead of using command line switches environment variables can be used, there are several ways how those can be implemented. For example `.env` files could be used in combination with `docker-compose`. 
+
+Passing variables to a docker container can also be achieved in different ways, please see the documentation for all available options [here](https://docs.docker.com/compose/environment-variables/).
 
 ## 🐞 Bug / Feature Request
 
