@@ -10,9 +10,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewHandler(ctx context.Context, class service.Class, enableFakeKline bool) func(w http.ResponseWriter, r *http.Request) {
+func NewHandler(
+	ctx context.Context, class service.Class,
+	enableFakeKline, startTickerWithKline, startOrderbookWithKline bool,
+) func(w http.ResponseWriter, r *http.Request) {
 	handler := &Handler{
-		srv:             service.NewService(ctx, class),
+		srv:             service.NewService(ctx, class, startTickerWithKline, startOrderbookWithKline),
 		class:           class,
 		enableFakeKline: enableFakeKline,
 	}
@@ -38,7 +41,7 @@ func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {
 	case "/api/v3/depth", "/fapi/v1/depth":
 		s.depth(w, r)
 
-	case "/api/v3/ticker/24hr":
+	case "/api/v3/ticker/24hr", "/fapi/v1/ticker/24hr":
 		s.ticker(w, r)
 
 	case "/api/v3/exchangeInfo", "/fapi/v1/exchangeInfo":

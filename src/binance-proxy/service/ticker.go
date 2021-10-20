@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	spot "github.com/adshao/go-binance/v2"
+	futures "github.com/adshao/go-binance/v2/futures"
 )
 
 type TickerSrv struct {
@@ -105,11 +106,19 @@ func (s *TickerSrv) Stop() {
 }
 
 func (s *TickerSrv) connectTickerBook() (doneC, stopC chan struct{}, err error) {
-	return spot.WsBookTickerServe(s.si.Symbol, s.wsHandlerBookTicker, s.errHandler)
+	if s.si.Class == SPOT {
+		return spot.WsBookTickerServe(s.si.Symbol, s.wsHandlerBookTicker, s.errHandler)
+	} else {
+		return futures.WsBookTickerServe(s.si.Symbol, s.wsHandlerBookTickerFutures, s.errHandler)
+	}
 }
 
 func (s *TickerSrv) connectTicker24hr() (doneC, stopC chan struct{}, err error) {
-	return spot.WsMarketStatServe(s.si.Symbol, s.wsHandlerTicker24hr, s.errHandler)
+	if s.si.Class == SPOT {
+		return spot.WsMarketStatServe(s.si.Symbol, s.wsHandlerTicker24hr, s.errHandler)
+	} else {
+		return futures.WsMarketTickerServe(s.si.Symbol, s.wsHandlerTicker24hrFutures, s.errHandler)
+	}
 }
 
 func (s *TickerSrv) GetTicker() *Ticker24hr {
@@ -188,6 +197,47 @@ func (s *TickerSrv) wsHandlerTicker24hr(event *spot.WsMarketStatEvent) {
 		FirstID:            event.FirstID,
 		LastID:             event.LastID,
 		Count:              event.Count,
+	}
+}
+
+func (s *TickerSrv) wsHandlerBookTickerFutures(event *futures.WsBookTickerEvent) {
+	s.rw.Lock()
+	defer s.rw.Unlock()
+
+	s.bookTicker = &BookTicker{
+		Symbol:      event.Symbol,
+		BidPrice:    event.BestBidPrice,
+		BidQuantity: event.BestBidQty,
+		AskPrice:    event.BestAskPrice,
+		AskQuantity: event.BestAskQty,
+	}
+}
+
+func (s *TickerSrv) wsHandlerTicker24hrFutures(event *futures.WsMarketTickerEvent) {
+	s.rw.Lock()
+	defer s.rw.Unlock()
+
+	if s.ticker24hr == nil {
+		defer s.initDone()
+	}
+
+	s.ticker24hr = &Ticker24hr{
+		Symbol:             event.Symbol,
+		PriceChange:        event.PriceChange,
+		PriceChangePercent: event.PriceChangePercent,
+		WeightedAvgPrice:   event.WeightedAvgPrice,
+		LastPrice:          event.ClosePrice,
+		LastQty:            event.CloseQty,
+		OpenPrice:          event.OpenPrice,
+		HighPrice:          event.HighPrice,
+		LowPrice:           event.LowPrice,
+		Volume:             event.BaseVolume,
+		QuoteVolume:        event.QuoteVolume,
+		OpenTime:           event.OpenTime,
+		CloseTime:          event.CloseTime,
+		FirstID:            event.FirstID,
+		LastID:             event.LastID,
+		Count:              event.TradeCount,
 	}
 }
 

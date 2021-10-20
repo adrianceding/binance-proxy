@@ -12,19 +12,28 @@ type Service struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	startTickerWithKline    bool
+	startOrderbookWithKline bool
+
 	class           Class
 	exchangeInfoSrv *ExchangeInfoSrv
 	klinesSrv       sync.Map // map[symbolInterval]*Klines
 	depthSrv        sync.Map // map[symbolInterval]*Depth
 	tickerSrv       sync.Map // map[symbolInterval]*Ticker
 
+	klineIntervalMap sync.Map // map[string]string
+
 	lastGetKlines sync.Map // map[symbolInterval]time.Time
 	lastGetDepth  sync.Map // map[symbolInterval]time.Time
 	lastGetTicker sync.Map // map[symbolInterval]time.Time
 }
 
-func NewService(ctx context.Context, class Class) *Service {
-	s := &Service{class: class}
+func NewService(ctx context.Context, class Class, startTickerWithKline, startOrderbookWithKline bool) *Service {
+	s := &Service{
+		class:                   class,
+		startTickerWithKline:    startTickerWithKline,
+		startOrderbookWithKline: startOrderbookWithKline,
+	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.exchangeInfoSrv = NewExchangeInfoSrv(s.ctx, NewSymbolInterval(s.class, "", ""))
 	s.exchangeInfoSrv.Start()
@@ -131,6 +140,7 @@ func (s *Service) Klines(symbol, interval string) []*Kline {
 			srv.(*KlinesSrv).Start()
 		}
 	}
+
 	s.lastGetKlines.Store(*si, time.Now())
 
 	return srv.(*KlinesSrv).GetKlines()
