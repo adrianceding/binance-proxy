@@ -12,8 +12,8 @@ type Service struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	startTickerWithKline    bool
-	startOrderbookWithKline bool
+	startTickerWithKline bool
+	startDepthWithKline  bool
 
 	class           Class
 	exchangeInfoSrv *ExchangeInfoSrv
@@ -21,18 +21,16 @@ type Service struct {
 	depthSrv        sync.Map // map[symbolInterval]*Depth
 	tickerSrv       sync.Map // map[symbolInterval]*Ticker
 
-	klineIntervalMap sync.Map // map[string]string
-
 	lastGetKlines sync.Map // map[symbolInterval]time.Time
 	lastGetDepth  sync.Map // map[symbolInterval]time.Time
 	lastGetTicker sync.Map // map[symbolInterval]time.Time
 }
 
-func NewService(ctx context.Context, class Class, startTickerWithKline, startOrderbookWithKline bool) *Service {
+func NewService(ctx context.Context, class Class, startTickerWithKline, startDepthWithKline bool) *Service {
 	s := &Service{
-		class:                   class,
-		startTickerWithKline:    startTickerWithKline,
-		startOrderbookWithKline: startOrderbookWithKline,
+		class:                class,
+		startTickerWithKline: startTickerWithKline,
+		startDepthWithKline:  startDepthWithKline,
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.exchangeInfoSrv = NewExchangeInfoSrv(s.ctx, NewSymbolInterval(s.class, "", ""))
@@ -59,9 +57,12 @@ func NewService(ctx context.Context, class Class, startTickerWithKline, startOrd
 }
 
 func (s *Service) autoRemoveExpired() {
+	var aliveKlines = make(map[string]struct{})
 	s.klinesSrv.Range(func(k, v interface{}) bool {
 		si := k.(symbolInterval)
 		srv := v.(*KlinesSrv)
+
+		aliveKlines[si.Symbol] = struct{}{}
 
 		if t, ok := s.lastGetKlines.Load(si); ok {
 			if time.Now().Sub(t.(time.Time)) > 2*INTERVAL_2_DURATION[si.Interval] {
@@ -82,7 +83,9 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*DepthSrv)
 
 		if t, ok := s.lastGetDepth.Load(si); ok {
-			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
+			_, isKlineAlive := aliveKlines[si.Symbol]
+
+			if ((s.startDepthWithKline && !isKlineAlive) || !s.startDepthWithKline) && time.Now().Sub(t.(time.Time)) > 2*time.Minute {
 				log.Debugf("%s.Depth srv expired!Removed", si)
 				s.lastGetDepth.Delete(si)
 
@@ -100,7 +103,9 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*TickerSrv)
 
 		if t, ok := s.lastGetTicker.Load(si); ok {
-			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
+			_, isKlineAlive := aliveKlines[si.Symbol]
+
+			if ((s.startTickerWithKline && !isKlineAlive) || !s.startTickerWithKline) && time.Now().Sub(t.(time.Time)) > 2*time.Minute {
 				log.Debugf("%s.Ticker srv expired!Removed", si)
 				s.lastGetTicker.Delete(si)
 
@@ -117,15 +122,11 @@ func (s *Service) autoRemoveExpired() {
 
 func (s *Service) Ticker(symbol string) *Ticker24hr {
 	si := NewSymbolInterval(s.class, symbol, "")
-	srv, loaded := s.tickerSrv.Load(*si)
-	if !loaded {
-		if srv, loaded = s.tickerSrv.LoadOrStore(*si, NewTickerSrv(s.ctx, si)); loaded == false {
-			srv.(*TickerSrv).Start()
-		}
-	}
+	srv := s.StartTickerSrv(si)
+
 	s.lastGetTicker.Store(*si, time.Now())
 
-	return srv.(*TickerSrv).GetTicker()
+	return srv.GetTicker()
 }
 
 func (s *Service) ExchangeInfo() []byte {
@@ -134,27 +135,54 @@ func (s *Service) ExchangeInfo() []byte {
 
 func (s *Service) Klines(symbol, interval string) []*Kline {
 	si := NewSymbolInterval(s.class, symbol, interval)
+	srv := s.StartKlineSrv(si)
+	if s.startTickerWithKline {
+		s.StartTickerSrv(NewSymbolInterval(s.class, symbol, ""))
+	}
+	if s.startDepthWithKline {
+		s.StartDepthSrv(NewSymbolInterval(s.class, symbol, ""))
+	}
+
+	s.lastGetKlines.Store(*si, time.Now())
+
+	return srv.GetKlines()
+}
+
+func (s *Service) Depth(symbol string) *Depth {
+	si := NewSymbolInterval(s.class, symbol, "")
+	srv := s.StartDepthSrv(si)
+
+	s.lastGetDepth.Store(*si, time.Now())
+
+	return srv.GetDepth()
+}
+
+func (s *Service) StartKlineSrv(si *symbolInterval) *KlinesSrv {
 	srv, loaded := s.klinesSrv.Load(*si)
 	if !loaded {
 		if srv, loaded = s.klinesSrv.LoadOrStore(*si, NewKlinesSrv(s.ctx, si)); loaded == false {
 			srv.(*KlinesSrv).Start()
 		}
 	}
-
-	s.lastGetKlines.Store(*si, time.Now())
-
-	return srv.(*KlinesSrv).GetKlines()
+	return srv.(*KlinesSrv)
 }
 
-func (s *Service) Depth(symbol string) *Depth {
-	si := NewSymbolInterval(s.class, symbol, "")
+func (s *Service) StartDepthSrv(si *symbolInterval) *DepthSrv {
 	srv, loaded := s.depthSrv.Load(*si)
 	if !loaded {
 		if srv, loaded = s.depthSrv.LoadOrStore(*si, NewDepthSrv(s.ctx, si)); loaded == false {
 			srv.(*DepthSrv).Start()
 		}
 	}
-	s.lastGetDepth.Store(*si, time.Now())
+	return srv.(*DepthSrv)
+}
 
-	return srv.(*DepthSrv).GetDepth()
+func (s *Service) StartTickerSrv(si *symbolInterval) *TickerSrv {
+	srv, loaded := s.tickerSrv.Load(*si)
+	if !loaded {
+		if srv, loaded = s.tickerSrv.LoadOrStore(*si, NewTickerSrv(s.ctx, si)); loaded == false {
+			srv.(*TickerSrv).Start()
+		}
+	}
+	return srv.(*TickerSrv)
 }

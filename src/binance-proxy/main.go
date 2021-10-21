@@ -17,7 +17,7 @@ import (
 
 func startProxy(ctx context.Context, address string, class service.Class) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler.NewHandler(ctx, class, flagEnableFakeKline, flagStartTickerWithKline, flagStartOrderbookWithKline))
+	mux.HandleFunc("/", handler.NewHandler(ctx, class, flagEnableFakeKline, flagStartTickerWithKline, flagStartDepthWithKline))
 
 	log.Infof("Start %s proxy !Address: %s", class, address)
 	if err := http.ListenAndServe(address, mux); err != nil {
@@ -42,14 +42,14 @@ var flagFuturesAddress string
 var flagDebug bool
 var flagEnableFakeKline bool
 var flagStartTickerWithKline bool
-var flagStartOrderbookWithKline bool
+var flagStartDepthWithKline bool
 
 func main() {
 	flag.StringVar(&flagSpotAddress, "s", ":8090", "spot bind address.")
 	flag.StringVar(&flagFuturesAddress, "f", ":8091", "futures bind address.")
 	flag.BoolVar(&flagEnableFakeKline, "fakekline", false, "enable fake kline.")
 	flag.BoolVar(&flagStartTickerWithKline, "at", false, "auto monitor ticker with kline request.")
-	flag.BoolVar(&flagStartOrderbookWithKline, "ao", false, "auto monitor orderbook with kline request.")
+	flag.BoolVar(&flagStartDepthWithKline, "ao", false, "auto monitor depth with kline request.")
 	flag.BoolVar(&flagDebug, "v", false, "print debug log.")
 	flag.Parse()
 

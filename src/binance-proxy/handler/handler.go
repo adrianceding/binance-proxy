@@ -12,10 +12,10 @@ import (
 
 func NewHandler(
 	ctx context.Context, class service.Class,
-	enableFakeKline, startTickerWithKline, startOrderbookWithKline bool,
+	enableFakeKline, startTickerWithKline, startDepthWithKline bool,
 ) func(w http.ResponseWriter, r *http.Request) {
 	handler := &Handler{
-		srv:             service.NewService(ctx, class, startTickerWithKline, startOrderbookWithKline),
+		srv:             service.NewService(ctx, class, startTickerWithKline, startDepthWithKline),
 		class:           class,
 		enableFakeKline: enableFakeKline,
 	}

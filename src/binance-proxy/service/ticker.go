@@ -71,16 +71,16 @@ func (s *TickerSrv) Start() {
 			s.bookTicker = nil
 			s.rw.Unlock()
 
-			ticker24hrDoneC, ticker24hrstopC, err := s.connectTicker24hr()
-			if err != nil {
-				log.Errorf("%s.Websocket 24hr ticker connect error!Error:%s", s.si, err)
-				continue
-			}
-
 			bookDoneC, bookStopC, err := s.connectTickerBook()
 			if err != nil {
 				bookStopC <- struct{}{}
 				log.Errorf("%s.Websocket book ticker connect error!Error:%s", s.si, err)
+				continue
+			}
+
+			ticker24hrDoneC, ticker24hrstopC, err := s.connectTicker24hr()
+			if err != nil {
+				log.Errorf("%s.Websocket 24hr ticker connect error!Error:%s", s.si, err)
 				continue
 			}
 
