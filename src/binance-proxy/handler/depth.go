@@ -15,7 +15,7 @@ func (s *Handler) depth(w http.ResponseWriter, r *http.Request) {
 
 	limitInt, err := strconv.Atoi(limit)
 	switch {
-	case err != nil, symbol == "", limitInt < 5, limitInt > 20:
+	case err != nil, symbol == "", limitInt > 1000:
 		s.reverseProxy(w, r)
 		return
 	}
