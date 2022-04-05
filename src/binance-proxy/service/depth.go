@@ -332,8 +332,6 @@ func (s *DepthSrv) convertDepth() {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
-	log.Debug("ok")
-
 	s.depth = depth
 }
 
