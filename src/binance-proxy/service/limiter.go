@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	SpotLimiter    = rate.NewLimiter(20, 1200)
-	FuturesLimiter = rate.NewLimiter(40, 2400)
+	SpotLimiter    = rate.NewLimiter(20, 1000)
+	FuturesLimiter = rate.NewLimiter(40, 2000)
 )
 
 func RateWait(ctx context.Context, class Class, method, path string, query url.Values) {
