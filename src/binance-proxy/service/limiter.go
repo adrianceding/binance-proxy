@@ -6,12 +6,13 @@ import (
 	"net/url"
 	"strconv"
 
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 )
 
 var (
-	SpotLimiter    = rate.NewLimiter(20, 1000)
-	FuturesLimiter = rate.NewLimiter(40, 2000)
+	SpotLimiter    = rate.NewLimiter(20, 500)
+	FuturesLimiter = rate.NewLimiter(40, 1100)
 )
 
 func RateWait(ctx context.Context, class Class, method, path string, query url.Values) {
@@ -65,8 +66,9 @@ func RateWait(ctx context.Context, class Class, method, path string, query url.V
 		}
 	case "/fapi/v1/userTrades", "/fapi/v2/account":
 		weight = 5
-
 	}
+
+	log.Debugf("%s.Weight:%d", path, weight)
 
 	if class == SPOT {
 		SpotLimiter.WaitN(ctx, weight)
