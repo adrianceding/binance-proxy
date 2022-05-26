@@ -5,71 +5,59 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"binance-proxy/service"
 )
 
 func (s *Handler) klines(w http.ResponseWriter, r *http.Request) {
 	symbol := r.URL.Query().Get("symbol")
 	interval := r.URL.Query().Get("interval")
-	limit := r.URL.Query().Get("limit")
-	if limit == "" {
-		limit = "500"
+	limitInt, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limitInt == 0 {
+		limitInt = 500
 	}
-	limitInt, err := strconv.Atoi(limit)
+
+	startTimeUnix, _ := strconv.Atoi(r.URL.Query().Get("startTime"))
+	startTime := time.Unix(int64(startTimeUnix/1000), 0)
 
 	switch {
-	case err != nil, limitInt <= 0, limitInt > 1000,
-		r.URL.Query().Get("startTime") != "", r.URL.Query().Get("endTime") != "",
+	case limitInt <= 0, limitInt > 1000,
+		startTime.Unix() > 0 && startTime.Before(time.Now().Add(service.INTERVAL_2_DURATION[interval]*999*-1)),
+		r.URL.Query().Get("endTime") != "",
 		symbol == "", interval == "":
 		s.reverseProxy(w, r)
 		return
 	}
 
 	data := s.srv.Klines(symbol, interval)
-	if data == nil {
-		s.reverseProxy(w, r)
-		return
+	klines := make([]interface{}, 0)
+	startTimeUnixMs := startTime.Unix() * 1000
+	if startTimeUnixMs == 0 && limitInt < len(data) {
+		data = data[len(data)-limitInt:]
 	}
-
-	minLen := len(data)
-	if minLen > limitInt {
-		minLen = limitInt
-	}
-
-	klines := make([]interface{}, minLen)
-	for i := minLen; i > 0; i-- {
-		ri := len(data) - i
-		klines[minLen-i] = []interface{}{
-			data[ri].OpenTime,
-			data[ri].Open,
-			data[ri].High,
-			data[ri].Low,
-			data[ri].Close,
-			data[ri].Volume,
-			data[ri].CloseTime,
-			data[ri].QuoteAssetVolume,
-			data[ri].TradeNum,
-			data[ri].TakerBuyBaseAssetVolume,
-			data[ri].TakerBuyQuoteAssetVolume,
-			"0",
+	for _, v := range data {
+		if len(klines) >= limitInt {
+			break
 		}
-	}
 
-	if s.enableFakeKline && len(data) > 0 && time.Now().UnixNano()/1e6 > data[len(data)-1].CloseTime {
+		if startTimeUnixMs > 0 && startTimeUnixMs > v.OpenTime {
+			continue
+		}
+
 		klines = append(klines, []interface{}{
-			data[len(data)-1].CloseTime + 1,
-			data[len(data)-1].Close,
-			data[len(data)-1].Close,
-			data[len(data)-1].Close,
-			data[len(data)-1].Close,
-			"0.0",
-			data[len(data)-1].CloseTime + 1 + (data[len(data)-1].CloseTime - data[len(data)-1].OpenTime),
-			"0.0",
-			0,
-			"0.0",
-			"0.0",
+			v.OpenTime,
+			v.Open,
+			v.High,
+			v.Low,
+			v.Close,
+			v.Volume,
+			v.CloseTime,
+			v.QuoteAssetVolume,
+			v.TradeNum,
+			v.TakerBuyBaseAssetVolume,
+			v.TakerBuyQuoteAssetVolume,
 			"0",
 		})
-		klines = klines[len(klines)-minLen:]
 	}
 
 	w.Header().Set("Content-Type", "application/json")

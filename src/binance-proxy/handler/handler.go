@@ -10,14 +10,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewHandler(
-	ctx context.Context, class service.Class,
-	enableFakeKline, startTickerWithKline, startDepthWithKline bool,
-) func(w http.ResponseWriter, r *http.Request) {
+func NewHandler(ctx context.Context, class service.Class) func(w http.ResponseWriter, r *http.Request) {
 	handler := &Handler{
-		srv:             service.NewService(ctx, class, startTickerWithKline, startDepthWithKline),
-		class:           class,
-		enableFakeKline: enableFakeKline,
+		srv:   service.NewService(ctx, class),
+		class: class,
 	}
 	handler.ctx, handler.cancel = context.WithCancel(ctx)
 
@@ -28,9 +24,8 @@ type Handler struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	class           service.Class
-	srv             *service.Service
-	enableFakeKline bool
+	class service.Class
+	srv   *service.Service
 }
 
 func (s *Handler) Router(w http.ResponseWriter, r *http.Request) {

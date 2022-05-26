@@ -12,9 +12,6 @@ type Service struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	startTickerWithKline bool
-	startDepthWithKline  bool
-
 	class           Class
 	exchangeInfoSrv *ExchangeInfoSrv
 	klinesSrv       sync.Map // map[symbolInterval]*Klines
@@ -26,12 +23,8 @@ type Service struct {
 	lastGetTicker sync.Map // map[symbolInterval]time.Time
 }
 
-func NewService(ctx context.Context, class Class, startTickerWithKline, startDepthWithKline bool) *Service {
-	s := &Service{
-		class:                class,
-		startTickerWithKline: startTickerWithKline,
-		startDepthWithKline:  startDepthWithKline,
-	}
+func NewService(ctx context.Context, class Class) *Service {
+	s := &Service{class: class}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.exchangeInfoSrv = NewExchangeInfoSrv(s.ctx, NewSymbolInterval(s.class, "", ""))
 	s.exchangeInfoSrv.Start()
@@ -83,9 +76,7 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*DepthSrv)
 
 		if t, ok := s.lastGetDepth.Load(si); ok {
-			_, isKlineAlive := aliveKlines[si.Symbol]
-
-			if ((s.startDepthWithKline && !isKlineAlive) || !s.startDepthWithKline) && time.Now().Sub(t.(time.Time)) > 2*time.Minute {
+			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
 				log.Debugf("%s.Depth srv expired!Removed", si)
 				s.lastGetDepth.Delete(si)
 
@@ -103,9 +94,7 @@ func (s *Service) autoRemoveExpired() {
 		srv := v.(*TickerSrv)
 
 		if t, ok := s.lastGetTicker.Load(si); ok {
-			_, isKlineAlive := aliveKlines[si.Symbol]
-
-			if ((s.startTickerWithKline && !isKlineAlive) || !s.startTickerWithKline) && time.Now().Sub(t.(time.Time)) > 2*time.Minute {
+			if time.Now().Sub(t.(time.Time)) > 2*time.Minute {
 				log.Debugf("%s.Ticker srv expired!Removed", si)
 				s.lastGetTicker.Delete(si)
 
@@ -136,12 +125,6 @@ func (s *Service) ExchangeInfo() []byte {
 func (s *Service) Klines(symbol, interval string) []*Kline {
 	si := NewSymbolInterval(s.class, symbol, interval)
 	srv := s.StartKlineSrv(si)
-	if s.startTickerWithKline {
-		s.StartTickerSrv(NewSymbolInterval(s.class, symbol, ""))
-	}
-	if s.startDepthWithKline {
-		s.StartDepthSrv(NewSymbolInterval(s.class, symbol, ""))
-	}
 
 	s.lastGetKlines.Store(*si, time.Now())
 
