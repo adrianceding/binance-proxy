@@ -1,6 +1,7 @@
+
 # binance-proxy
 
-Developed based on `python-binance`. He is `the shoulders of giants`.Thanks
+Developed based on [https://github.com/adshao/go-binance](https://github.com/adshao/go-binance). He is `the shoulders of giants`.Thanks
 
 local `klines` ,`depth` ,`exchangeInfo`,`24hour`
 
